@@ -1,0 +1,14 @@
+# binaries
+bin/
+dist/
+
+# local env/secrets
+.env
+.env.*
+*.local
+
+# go
+*.test
+
+# local secret env files
+deploy/secrets/*.env

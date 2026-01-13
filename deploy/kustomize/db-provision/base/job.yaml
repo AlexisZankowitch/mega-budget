@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-provision
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: provision
+          image: postgres:16
+          env:
+            - name: POSTGRES_HOST
+              value: postgres.databases.svc.cluster.local
+            - name: POSTGRES_PORT
+              value: "5432"
+          envFrom:
+            - secretRef:
+                name: postgres-admin
+            - configMapRef:
+                name: app-db-config
+            - secretRef:
+                name: app-db-secret
+          command: ["bash", "-lc"]
+          args:
+            - >
+              psql "postgresql://$POSTGRES_ADMIN_USER:$POSTGRES_ADMIN_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/postgres?sslmode=disable"
+              -v app_user="$APP_DB_USER"
+              -v app_pass="$APP_DB_PASSWORD"
+              -v app_db="$APP_DB_NAME"
+              -f /scripts/provision.sql
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: db-provision-sql

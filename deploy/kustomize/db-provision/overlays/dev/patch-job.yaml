@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-provision
+spec:
+  template:
+    spec:
+      containers:
+        - name: provision
+          envFrom:
+            - secretRef:
+                name: postgres-admin
+            - configMapRef:
+                name: spendtrack-dev-db-config
+            - secretRef:
+                name: spendtrack-dev-db-secret

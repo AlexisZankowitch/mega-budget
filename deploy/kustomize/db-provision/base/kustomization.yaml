@@ -1,0 +1,10 @@
+resources:
+  - job.yaml
+
+configMapGenerator:
+  - name: db-provision-sql
+    files:
+      - provision.sql
+
+generatorOptions:
+  disableNameSuffixHash: true
