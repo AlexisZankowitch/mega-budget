@@ -9,6 +9,8 @@ dist/
 
 # go
 *.test
+.gocache
+.gomodcache
 
 # local secret env files
 deploy/secrets/*.env
