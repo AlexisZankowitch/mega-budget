@@ -13,6 +13,7 @@ Build a small “spending tracker” Go service backed by Postgres.
 ### Kubernetes cluster
 - Cluster: k0s (kubeconfig: `~/.kube/k0s-zankowitch_1`)
 - Namespace used for DB-related objects: `databases`
+- Namespace used for the prod app: `spendtrack`
 
 ### “External Postgres” inside cluster (Service + Endpoints)
 We provide a stable in-cluster DNS name for the external Postgres:
@@ -25,6 +26,9 @@ We provision the logical dev DB + role by running a Kubernetes Job that executes
 - Base: `deploy/kustomize/db-provision/base`
 - Dev overlay: `deploy/kustomize/db-provision/overlays/dev`
 - Job name in dev: `db-provision-dev`
+We provision the logical prod DB + role the same way:
+- Prod overlay: `deploy/kustomize/db-provision/overlays/prod`
+- Job name in prod: `db-provision-prod`
 
 Config vs secrets:
 - Non-secrets in ConfigMap (dev overlay):
@@ -34,6 +38,7 @@ Config vs secrets:
   - `deploy/secrets/*.env` is ignored by git
   - `postgres-admin` secret contains admin creds
   - `spendtrack-dev-db-secret` contains `APP_DB_PASSWORD` only
+  - `spendtrack-prod-db-secret` contains `APP_DB_PASSWORD` and `DATABASE_URL`
 
 ## Migrations (pressly/goose)
 - Migrations live in `migrations/` as SQL files.
@@ -61,17 +66,27 @@ Typical dev commands (workstation):
 
 ## Kustomize / kubectl conventions
 Use this kubeconfig for all cluster operations:
-- `export KCFG="$HOME/.kube/k0s-zankowitch_1"`
+- `export KUBECONFIG="$HOME/.kube/k0s-zankowitch_1"`
 
 Useful commands:
 - Apply external postgres DNS wiring:
-  - `kubectl --kubeconfig "$KCFG" apply -k deploy/kustomize/external-postgres/overlays/dev`
+  - `kubectl apply -k deploy/kustomize/external-postgres/overlays/dev`
 - Apply db provisioning (creates namespace/job/config):
-  - `kubectl --kubeconfig "$KCFG" apply -k deploy/kustomize/db-provision/overlays/dev`
+  - `kubectl apply -k deploy/kustomize/db-provision/overlays/dev`
+  - `kubectl apply -k deploy/kustomize/db-provision/overlays/prod`
 - Re-run provisioning job:
-  - `kubectl --kubeconfig "$KCFG" -n databases delete job db-provision-dev --ignore-not-found`
-  - `kubectl --kubeconfig "$KCFG" apply -k deploy/kustomize/db-provision/overlays/dev`
-  - `kubectl --kubeconfig "$KCFG" -n databases logs -l job-name=db-provision-dev --tail=200`
+  - `kubectl -n databases delete job db-provision-dev --ignore-not-found`
+  - `kubectl apply -k deploy/kustomize/db-provision/overlays/dev`
+  - `kubectl -n databases logs -l job-name=db-provision-dev --tail=200`
+  - `kubectl -n databases delete job db-provision-prod --ignore-not-found`
+  - `kubectl apply -k deploy/kustomize/db-provision/overlays/prod`
+  - `kubectl -n databases logs -l job-name=db-provision-prod --tail=200`
+
+App deployment (prod):
+- Base: `deploy/kustomize/app/base`
+- Prod overlay: `deploy/kustomize/app/overlays/prod`
+- Apply:
+  - `kubectl apply -k deploy/kustomize/app/overlays/prod`
 
 ## Coding conventions (when we implement the Go service)
 - Keep `cmd/<app>/main.go` thin.
@@ -87,4 +102,3 @@ For any non-trivial change, create a new plan file under `plans/`:
 
 ## Keep this guide up to date
 If you change workflows, repo layout, kustomize paths, namespaces, or the dev/prod database approach, update `AGENTS.md` in the same PR/commit.
-
