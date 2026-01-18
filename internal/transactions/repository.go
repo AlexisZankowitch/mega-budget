@@ -64,9 +64,6 @@ func (r *Repository) Get(ctx context.Context, id int64) (Transaction, error) {
 		&t.CreatedAt,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return Transaction{}, ErrNotFound
-		}
 		return Transaction{}, err
 	}
 
@@ -144,9 +141,6 @@ func (r *Repository) Update(ctx context.Context, id int64, in UpdateInput) (Tran
 		&t.CreatedAt,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return Transaction{}, ErrNotFound
-		}
 		return Transaction{}, err
 	}
 
@@ -168,7 +162,7 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return sql.ErrNoRows
 	}
 
 	return nil

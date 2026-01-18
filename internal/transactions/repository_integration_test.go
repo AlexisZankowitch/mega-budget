@@ -100,8 +100,8 @@ func TestRepositoryCRUD(t *testing.T) {
 
 	t.Run("read after delete returns not found", func(t *testing.T) {
 		_, err := repo.Get(ctx, created.ID)
-		if err != ErrNotFound {
-			t.Fatalf("get after delete = %v, want ErrNotFound", err)
+		if err != sql.ErrNoRows {
+			t.Fatalf("get after delete = %v, want sql.ErrNoRows", err)
 		}
 	})
 }
