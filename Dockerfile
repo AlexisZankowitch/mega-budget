@@ -14,11 +14,11 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
-  go build -trimpath -ldflags="-s -w" -o /out/spendtrack ./cmd/spendtrack
+  go build -trimpath -ldflags="-s -w" -o /out/megabudget ./cmd/megabudget
 
 FROM gcr.io/distroless/base-debian12
 WORKDIR /
-COPY --from=builder /out/spendtrack /spendtrack
+COPY --from=builder /out/megabudget /megabudget
 USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/spendtrack"]
+ENTRYPOINT ["/megabudget"]

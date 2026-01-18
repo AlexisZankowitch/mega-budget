@@ -1,8 +1,8 @@
-# Plan: Prod spendtrack deployment
+# Plan: Prod megabudget deployment
 
 ## Approach
-- Create prod DB provisioning overlay that runs in `databases` namespace and provisions `spendtrack` + `spendtrack_app`.
-- Add a new `spendtrack` namespace and app manifests (Deployment + Service) with DB connection from a Secret.
+- Create prod DB provisioning overlay that runs in `databases` namespace and provisions `megabudget` + `megabudget_app`.
+- Add a new `megabudget` namespace and app manifests (Deployment + Service) with DB connection from a Secret.
 - Keep secrets local in `deploy/secrets/*.env` and apply via kubectl, same as dev.
 - Validate each kustomize overlay via `kubectl kustomize` before applying.
 

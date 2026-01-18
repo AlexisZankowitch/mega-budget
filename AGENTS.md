@@ -1,4 +1,4 @@
-# Spendtrack — Agent Guide (AGENTS.md)
+# MegaBudget — Agent Guide (AGENTS.md)
 
 ## Goal
 Build a small “spending tracker” Go service backed by Postgres.
@@ -13,7 +13,7 @@ Build a small “spending tracker” Go service backed by Postgres.
 ### Kubernetes cluster
 - Cluster: k0s (kubeconfig: `~/.kube/k0s-zankowitch_1`)
 - Namespace used for DB-related objects: `databases`
-- Namespace used for the prod app: `spendtrack`
+- Namespace used for the prod app: `megabudget`
 
 ### “External Postgres” inside cluster (Service + Endpoints)
 We provide a stable in-cluster DNS name for the external Postgres:
@@ -32,13 +32,13 @@ We provision the logical prod DB + role the same way:
 
 Config vs secrets:
 - Non-secrets in ConfigMap (dev overlay):
-  - `APP_DB_NAME=spendtrack_dev`
-  - `APP_DB_USER=spendtrack_app_dev`
+  - `APP_DB_NAME=megabudget_dev`
+  - `APP_DB_USER=megabudget_app_dev`
 - Secrets are NOT committed:
   - `deploy/secrets/*.env` is ignored by git
   - `postgres-admin` secret contains admin creds
-  - `spendtrack-dev-db-secret` contains `APP_DB_PASSWORD` only
-  - `spendtrack-prod-db-secret` contains `APP_DB_NAME`, `APP_DB_USER`, and `APP_DB_PASSWORD`
+  - `megabudget-dev-db-secret` contains `APP_DB_PASSWORD` only
+  - `megabudget-prod-db-secret` contains `APP_DB_NAME`, `APP_DB_USER`, and `APP_DB_PASSWORD`
 
 ## Migrations (pressly/goose)
 - Migrations live in `migrations/` as SQL files.
@@ -53,10 +53,9 @@ Kubernetes Job (prod):
 - Keep `deploy/kustomize/db-migrations/base/migrations/` in sync with `migrations/` when adding new SQL files.
 
 Typical dev commands (workstation):
-- Set DB URL (no password in URL):
-  - `export DEV_DATABASE_URL='postgres://spendtrack_app_dev@192.168.1.23:5432/spendtrack_dev?sslmode=disable'`
-- Ensure Goose can read `.pgpass`:
-  - `export PGPASSFILE="$HOME/.pgpass"`
+- Set DB URL (password from local env file):
+  - `source deploy/secrets/megabudget-dev-db-secret.env`
+  - `export DEV_DATABASE_URL="postgres://megabudget_app_dev:${APP_DB_PASSWORD}@192.168.1.23:5432/megabudget_dev?sslmode=disable"`
 - Then:
   - `goose -dir migrations postgres "$DEV_DATABASE_URL" status`
   - `goose -dir migrations postgres "$DEV_DATABASE_URL" up`
@@ -65,7 +64,7 @@ Typical dev commands (workstation):
 - Do not commit secrets.
 - Keep passwords in local env files:
   - `deploy/secrets/postgres-admin.env`
-  - `deploy/secrets/spendtrack-dev-db-secret.env`
+  - `deploy/secrets/megabudget-dev-db-secret.env`
 - Apply/update secrets (example pattern):
   - `kubectl -n databases create secret generic … --from-env-file=… --dry-run=client -o yaml | kubectl apply -f -`
 
@@ -102,9 +101,9 @@ DB migrations (prod):
 - Apply:
   - `kubectl apply -k deploy/kustomize/db-migrations/overlays/prod`
 - Re-run:
-  - `kubectl -n spendtrack delete job db-migrate-prod --ignore-not-found`
+  - `kubectl -n megabudget delete job db-migrate-prod --ignore-not-found`
   - `kubectl apply -k deploy/kustomize/db-migrations/overlays/prod`
-  - `kubectl -n spendtrack logs -l job-name=db-migrate-prod --tail=200`
+  - `kubectl -n megabudget logs -l job-name=db-migrate-prod --tail=200`
 
 ## Coding conventions
 - Keep `cmd/<app>/main.go` thin.

@@ -9,4 +9,4 @@ spec:
         - name: migrate
           envFrom:
             - secretRef:
-                name: spendtrack-prod-db-secret
+                name: megabudget-prod-db-secret

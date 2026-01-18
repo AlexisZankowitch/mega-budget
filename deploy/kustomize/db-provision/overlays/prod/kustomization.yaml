@@ -9,10 +9,10 @@ resources:
   - ../../base
 
 configMapGenerator:
-  - name: spendtrack-prod-db-config
+  - name: megabudget-prod-db-config
     literals:
-      - APP_DB_NAME=spendtrack
-      - APP_DB_USER=spendtrack_app
+      - APP_DB_NAME=megabudget
+      - APP_DB_USER=megabudget_app
 
 generatorOptions:
   disableNameSuffixHash: true

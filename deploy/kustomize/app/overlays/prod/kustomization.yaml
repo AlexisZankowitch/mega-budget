@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: spendtrack
+namespace: megabudget
 nameSuffix: -prod
 
 resources:
@@ -13,5 +13,5 @@ patches:
       group: apps
       version: v1
       kind: Deployment
-      name: spendtrack
+      name: megabudget
     path: patch-deployment.yaml

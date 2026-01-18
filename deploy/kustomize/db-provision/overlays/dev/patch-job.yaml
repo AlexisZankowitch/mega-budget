@@ -11,6 +11,6 @@ spec:
             - secretRef:
                 name: postgres-admin
             - configMapRef:
-                name: spendtrack-dev-db-config
+                name: megabudget-dev-db-config
             - secretRef:
-                name: spendtrack-dev-db-secret
+                name: megabudget-dev-db-secret

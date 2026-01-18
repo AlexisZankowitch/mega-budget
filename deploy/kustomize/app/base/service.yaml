@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: spendtrack
+  name: megabudget
   labels:
-    app: spendtrack
+    app: megabudget
 spec:
   type: ClusterIP
   selector:
-    app: spendtrack
+    app: megabudget
   ports:
     - name: http
       port: 8080
