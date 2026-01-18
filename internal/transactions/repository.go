@@ -3,6 +3,9 @@ package transactions
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
+	"time"
 )
 
 type Repository struct {
@@ -72,15 +75,32 @@ func (r *Repository) Get(ctx context.Context, id int64) (Transaction, error) {
 	return t, nil
 }
 
-func (r *Repository) List(ctx context.Context, limit, offset int) ([]Transaction, error) {
-	const query = `
+func (r *Repository) ListAfter(ctx context.Context, limit int, startDate *time.Time, afterDate *time.Time, afterID *int64) ([]Transaction, error) {
+	const baseQuery = `
 		SELECT id, transaction_date, category_id, (amount * 100)::bigint, description, created_at
 		FROM transactions
-		ORDER BY transaction_date DESC, id DESC
-		LIMIT $1 OFFSET $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	clauses := make([]string, 0, 2)
+	args := make([]any, 0, 4)
+
+	if startDate != nil {
+		clauses = append(clauses, fmt.Sprintf("transaction_date <= $%d", len(args)+1))
+		args = append(args, *startDate)
+	}
+	if afterDate != nil && afterID != nil {
+		clauses = append(clauses, fmt.Sprintf("(transaction_date, id) < ($%d, $%d)", len(args)+1, len(args)+2))
+		args = append(args, *afterDate, *afterID)
+	}
+
+	query := baseQuery
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += fmt.Sprintf(" ORDER BY transaction_date DESC, id DESC LIMIT $%d", len(args)+1)
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
