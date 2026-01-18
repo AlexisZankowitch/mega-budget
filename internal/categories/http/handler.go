@@ -118,6 +118,39 @@ func (h *Handler) ListCategories(ctx context.Context, request api.ListCategories
 	}, nil
 }
 
+func (h *Handler) UpdateCategory(ctx context.Context, request api.UpdateCategoryRequestObject) (api.UpdateCategoryResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	logger := h.logger.With(zap.String("request_id", requestID))
+	if request.Body == nil {
+		logger.Warn("update category: missing request body")
+		return api.UpdateCategory400JSONResponse{
+			Body:    api.Error{Message: "missing request body"},
+			Headers: api.UpdateCategory400ResponseHeaders{XRequestID: requestID},
+		}, nil
+	}
+
+	updated, err := h.repo.Update(ctx, request.CategoryId, categories.UpdateInput{Name: request.Body.Name})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.UpdateCategory404JSONResponse{
+				Body:    api.Error{Message: "category not found"},
+				Headers: api.UpdateCategory404ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		logger.Error("update category: db error", zap.Error(err))
+		return nil, err
+	}
+
+	return api.UpdateCategory200JSONResponse{
+		Body: api.Category{
+			Id:        updated.ID,
+			Name:      updated.Name,
+			CreatedAt: updated.CreatedAt,
+		},
+		Headers: api.UpdateCategory200ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
 func requestIDFromContext(ctx context.Context) string {
 	if id, ok := logging.RequestIDFromContext(ctx); ok {
 		return id

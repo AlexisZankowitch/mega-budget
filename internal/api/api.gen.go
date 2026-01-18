@@ -41,6 +41,11 @@ type CategoryList struct {
 	Items []Category `json:"items"`
 }
 
+// CategoryUpdate defines model for CategoryUpdate.
+type CategoryUpdate struct {
+	Name string `json:"name"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Message string `json:"message"`
@@ -94,6 +99,9 @@ type ListTransactionsParams struct {
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CategoryCreate
 
+// UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
+type UpdateCategoryJSONRequestBody = CategoryUpdate
+
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = TransactionCreate
 
@@ -114,6 +122,9 @@ type ServerInterface interface {
 	// Get a category
 	// (GET /categories/{categoryId})
 	GetCategory(w http.ResponseWriter, r *http.Request, categoryId int64)
+	// Update a category
+	// (PUT /categories/{categoryId})
+	UpdateCategory(w http.ResponseWriter, r *http.Request, categoryId int64)
 	// List transactions
 	// (GET /transactions)
 	ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams)
@@ -209,6 +220,31 @@ func (siw *ServerInterfaceWrapper) GetCategory(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCategory(w, r, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCategory operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "categoryId" -------------
+	var categoryId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "categoryId", r.PathValue("categoryId"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCategory(w, r, categoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -482,6 +518,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/categories", wrapper.CreateCategory)
 	m.HandleFunc("DELETE "+options.BaseURL+"/categories/{categoryId}", wrapper.DeleteCategory)
 	m.HandleFunc("GET "+options.BaseURL+"/categories/{categoryId}", wrapper.GetCategory)
+	m.HandleFunc("PUT "+options.BaseURL+"/categories/{categoryId}", wrapper.UpdateCategory)
 	m.HandleFunc("GET "+options.BaseURL+"/transactions", wrapper.ListTransactions)
 	m.HandleFunc("POST "+options.BaseURL+"/transactions", wrapper.CreateTransaction)
 	m.HandleFunc("DELETE "+options.BaseURL+"/transactions/{transactionId}", wrapper.DeleteTransaction)
@@ -631,6 +668,66 @@ type GetCategory404JSONResponse struct {
 }
 
 func (response GetCategory404JSONResponse) VisitGetCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateCategoryRequestObject struct {
+	CategoryId int64 `json:"categoryId"`
+	Body       *UpdateCategoryJSONRequestBody
+}
+
+type UpdateCategoryResponseObject interface {
+	VisitUpdateCategoryResponse(w http.ResponseWriter) error
+}
+
+type UpdateCategory200ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateCategory200JSONResponse struct {
+	Body    Category
+	Headers UpdateCategory200ResponseHeaders
+}
+
+func (response UpdateCategory200JSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateCategory400ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateCategory400JSONResponse struct {
+	Body    Error
+	Headers UpdateCategory400ResponseHeaders
+}
+
+func (response UpdateCategory400JSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateCategory404ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateCategory404JSONResponse struct {
+	Body    Error
+	Headers UpdateCategory404ResponseHeaders
+}
+
+func (response UpdateCategory404JSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
@@ -877,6 +974,9 @@ type StrictServerInterface interface {
 	// Get a category
 	// (GET /categories/{categoryId})
 	GetCategory(ctx context.Context, request GetCategoryRequestObject) (GetCategoryResponseObject, error)
+	// Update a category
+	// (PUT /categories/{categoryId})
+	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
 	// List transactions
 	// (GET /transactions)
 	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
@@ -1030,6 +1130,39 @@ func (sh *strictHandler) GetCategory(w http.ResponseWriter, r *http.Request, cat
 	}
 }
 
+// UpdateCategory operation middleware
+func (sh *strictHandler) UpdateCategory(w http.ResponseWriter, r *http.Request, categoryId int64) {
+	var request UpdateCategoryRequestObject
+
+	request.CategoryId = categoryId
+
+	var body UpdateCategoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCategory(ctx, request.(UpdateCategoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCategory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCategoryResponseObject); ok {
+		if err := validResponse.VisitUpdateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListTransactions operation middleware
 func (sh *strictHandler) ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams) {
 	var request ListTransactionsRequestObject
@@ -1175,22 +1308,23 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"H4sIAAAAAAAC/+xYS2/jNhD+K8K0R8VWHuhBtyZbLIy226LYAgUWi4ARxwoXFqmQo6KBof9ekJJiUY/Y",
+	"SW25SHyT7NE8vm8eHK4hUVmuJEoyEK/BJPeYMfd4wwhTpR/tc65VjpoEun8SjYyQ3zKyb0ulM/sEnBGe",
+	"kcgQQqDHHCEGQ1rIFMoQBPdkhaQfrjZyQhKmqK2gZBla0Y6GMgSND4XQyCH+YtXVomHbna9PGtXdN0zI",
+	"KmziuHFi/Wh2M+iknlP/izDUVy4IM//he41LiOG7+Qb4eY36/Any8skQ05o99sN32p5z58+cHyLan7RW",
+	"uq81Q2NYuoPiRnBI92fNpGEJCSX7FlimCkm3SZOoO2RSUkNxO5J7slit2N0KISZd4KCGVyQ6R5NokTdR",
+	"jBh5RWHQBp7bhlvPpb43Q0XTUxP62G6tpxZNYyV1FLJeCvx/x3MblFvQ20fHaNfM65tGS8tY3zhROkKp",
+	"1SDkUrneJ8h6B79iyq4LniIFP/6+gBD+Rm1cEBDNzmeR9VXlKFkuIIbLWTS7hBByRvcO23mNXA19ii5N",
+	"LBvMOrbgEINNnpuNmI3C5Eqa6pOLKHKDWklC6b5meb4Sift+/s1UeFZJtOtQcunqwvVogd9+hhDukXHU",
+	"zvZfZ3/gQ4GGzhYf7LsvXf8XCI6SxFKgDpZKB6RZImQ6g7DlVZcqZ9wUWcbsqcRBELSgKkPIlRnAqmpT",
+	"T8O1YhwNXSv+uHeY6p5Y+pllE7bskXS+d+tDBFUe8elYCuFqj/lXHTkG4rpmPKiZPFIGVsgGrMnCque2",
+	"yne+bv5Z8LJyZYVVX/JT9IP73UtRL1Ou+nF8UkGD76TMXh2e2U+KgqUqJD8SrxUbHq/hcBv+iDROWjRJ",
+	"eU/Zf98J/x+ROuTnTLMMyTnyZQ3CGrTzutlCY9gUOnQbf9vy1nNT+TWEvBhItepkNtEUq4+BO02xt5nm",
+	"b3WAvZMSrhK4N5pb5/vnz9af24LD9f9QoKvDugGsRCYIxmr98gJCyNg/IisyiC+iKIRMyOrtfKALhF1s",
+	"FjJZFRyDdgSBkoHSwR0ulcaA7oUJbNQWqCEPDTFNzVoz4ObYhtR15abQRmlnyvGTs1RIB9+YZbYk1Puz",
+	"LPiL7Lp7jxe24IP1uO4FwKnVTbgteuW/ZV9sX60cZtj2b9Im3hq926PT4niExZE8BjoDar5uve20QHZz",
+	"9rRDHn+HJP+KdmyNfJa6aKqSPy2TB1omO1mwfZ/0Sv+gK+Wkg+44i+X/LOtPu+Xb2C396V2W/wYAAP//",
+	"Vmb/uk4hAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -53,4 +53,8 @@ func (h *Handler) ListCategories(ctx context.Context, request api.ListCategories
 	return h.categories.ListCategories(ctx, request)
 }
 
+func (h *Handler) UpdateCategory(ctx context.Context, request api.UpdateCategoryRequestObject) (api.UpdateCategoryResponseObject, error) {
+	return h.categories.UpdateCategory(ctx, request)
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)
