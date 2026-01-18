@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -54,6 +55,9 @@ type ServerInterface interface {
 	// Create a transaction
 	// (POST /transactions)
 	CreateTransaction(w http.ResponseWriter, r *http.Request)
+	// Delete a transaction
+	// (DELETE /transactions/{transactionId})
+	DeleteTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -70,6 +74,31 @@ func (siw *ServerInterfaceWrapper) CreateTransaction(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTransaction operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTransaction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "transactionId" -------------
+	var transactionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transactionId", r.PathValue("transactionId"), &transactionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transactionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTransaction(w, r, transactionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -200,6 +229,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("POST "+options.BaseURL+"/transactions", wrapper.CreateTransaction)
+	m.HandleFunc("DELETE "+options.BaseURL+"/transactions/{transactionId}", wrapper.DeleteTransaction)
 
 	return m
 }
@@ -246,11 +276,53 @@ func (response CreateTransaction400JSONResponse) VisitCreateTransactionResponse(
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type DeleteTransactionRequestObject struct {
+	TransactionId int64 `json:"transactionId"`
+}
+
+type DeleteTransactionResponseObject interface {
+	VisitDeleteTransactionResponse(w http.ResponseWriter) error
+}
+
+type DeleteTransaction204ResponseHeaders struct {
+	XRequestID string
+}
+
+type DeleteTransaction204Response struct {
+	Headers DeleteTransaction204ResponseHeaders
+}
+
+func (response DeleteTransaction204Response) VisitDeleteTransactionResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTransaction404ResponseHeaders struct {
+	XRequestID string
+}
+
+type DeleteTransaction404JSONResponse struct {
+	Body    Error
+	Headers DeleteTransaction404ResponseHeaders
+}
+
+func (response DeleteTransaction404JSONResponse) VisitDeleteTransactionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Create a transaction
 	// (POST /transactions)
 	CreateTransaction(ctx context.Context, request CreateTransactionRequestObject) (CreateTransactionResponseObject, error)
+	// Delete a transaction
+	// (DELETE /transactions/{transactionId})
+	DeleteTransaction(ctx context.Context, request DeleteTransactionRequestObject) (DeleteTransactionResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -313,18 +385,45 @@ func (sh *strictHandler) CreateTransaction(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// DeleteTransaction operation middleware
+func (sh *strictHandler) DeleteTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
+	var request DeleteTransactionRequestObject
+
+	request.TransactionId = transactionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTransaction(ctx, request.(DeleteTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTransactionResponseObject); ok {
+		if err := validResponse.VisitDeleteTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/8xUS4vUQBD+K6H0mEmy7uIhN0c9zEEQ8SCIDLXdlUwvk+62uiIMS/67dGde2cwyiA+8",
-	"VSr1+L6vqusRlOu8s2QlQP0IQW2ow2S+Z3YcDc/OE4uh5O4oBGwpmrLzBDUEYWNbGIYcmL73hklD/fUY",
-	"+C0/BLr7B1ICQw6fGW1AJcbZeQfsXG9lrQ6YGscdCtRgrLy+g2M5Y4Va4lhPoVDreLc2+mKG7bdbvN8S",
-	"1MI9XazAhEJ6HdPOCmgUWojp6NT2QDcHTUGx8QcWzzQ5xT8Dbg5GTvKsI4IZpDmaJ+IbDRfK5FNtJ6yv",
-	"jOltivxPhvWrwv++nteknKsXKxjbuPRQjER08IFaXPa6JcnefFxBDj+IQyIBVXFTVBGr82TRG6jhtqiK",
-	"W8jBo2yStuUZiuTwLqR1jQPB6F1pqGEc1fkTG7lQkKXTu5ignBWyKRe93xqVssuHMAo6XoFovWRqoIYX",
-	"5elMlPsbUc63Y5jKFqeRHME7G8Z9eVXd/A0AY+vJXux1iA9hQ6iJU/8vi0+jFIvVu/g9Tdn/y4wmK6Yx",
-	"xFnjOBNGZWxbQH6G7OnCRAB3VfXH2I339wKvJepsP89/x23IIfRdh7w7KpthJtMJDD8DAAD//zus9dBP",
-	"BgAA",
+	"H4sIAAAAAAAC/8xVTW/bMAz9Kwa3oxu7a7CDb+u6Qw4rhmGHAUURsBbtqogljaIHBIH/+yA5H3acIhi2",
+	"drvJjEg+vvfEbKC0jbOGjHgoNuDLR2owHj8xWw4Hx9YRi6YYbsh7rCkcZe0ICvDC2tTQdSkw/Wg1k4Li",
+	"bn/xPt1dtA9PVAp0KXxjNB5L0dZMO2BjWyPLcoepstygQAHayPs57MtpI1QTh3olCtWW10utTmaYdrXC",
+	"hxVBIdzSyQpMKKSWIW1QQKHQheiGDm1346agyJes3W6KZ5oc7j8DbgpGDvQsA4IJpCmaI/K1ghNl0jG3",
+	"o6nPyPQx3vxPxPpd4v+cz3NUTtkLFbSpbHwoWgI6+Ew1XreqJkk+fFlACj+JfRwC8tnlLA9YrSODTkMB",
+	"V7N8dgUpOJTHyG02QBEDzvpo1yAIhuhCQQG9VMMn1s9CXq6tWoeE0hohE3PRuZUuY3b25HtC+y0QTm+Z",
+	"KijgTXZYE9l2R2RTd3Rj2oIaMeCdNb73y7v88iUA9K1HvtjyEB7CI6Eijv2/X3ztqbhY3ITvccr2t0Qr",
+	"MqIrTZxUlhNhLLWpZ5AOkB0bJgCY5/lfm67fvyfmukaVbPV8vdm6FHzbNMjrPbMJJjJSIB07NNsMvhaq",
+	"6yGtqH9/Y8/exPixZ0e+mU9HurXJjupXFXn+8iLfWkkq2xr1jyTuBTmWOCwjxoYkwrnbgA5tw4IKexub",
+	"UHEkOhzvgyGEs/8V3X3Xdb8CAAD//23SjnqjCAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

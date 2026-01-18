@@ -36,6 +36,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /transactions/{transactionId}:
+    parameters:
+      - in: path
+        name: transactionId
+        required: true
+        schema:
+          type: integer
+          format: int64
+    delete:
+      summary: Delete a transaction
+      operationId: deleteTransaction
+      responses:
+        "204":
+          description: No content
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+        "404":
+          description: Not found
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     TransactionCreate:

@@ -2,6 +2,8 @@ package transactionshttp
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"github.com/oapi-codegen/runtime/types"
 	"go.uber.org/zap"
@@ -64,6 +66,27 @@ func (h *Handler) CreateTransaction(ctx context.Context, request api.CreateTrans
 	return api.CreateTransaction201JSONResponse{
 		Body:    response,
 		Headers: api.CreateTransaction201ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
+func (h *Handler) DeleteTransaction(ctx context.Context, request api.DeleteTransactionRequestObject) (api.DeleteTransactionResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	err := h.repo.Delete(ctx, request.TransactionId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.DeleteTransaction404JSONResponse{
+				Body:    api.Error{Message: "transaction not found"},
+				Headers: api.DeleteTransaction404ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		h.logger.Error("delete transaction: db error", zap.Error(err))
+		return nil, err
+	}
+
+	h.logger.Info("delete transaction: deleted", zap.Int64("transaction_id", request.TransactionId))
+
+	return api.DeleteTransaction204Response{
+		Headers: api.DeleteTransaction204ResponseHeaders{XRequestID: requestID},
 	}, nil
 }
 
