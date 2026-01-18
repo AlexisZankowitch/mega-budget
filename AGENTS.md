@@ -108,6 +108,9 @@ DB migrations (prod):
 ## Coding conventions
 - Keep `cmd/<app>/main.go` thin.
 - Put logic in `internal/` packages (config/db/http/handlers).
+- OpenAPI spec + generated code live in `internal/api/`.
+- HTTP handlers live in `internal/httpapi/`.
+- HTTP integration tests live in `internal/httpapi/` and use testcontainers.
 - No ORM: SQL-first.
 - Add a minimal health endpoint (`/healthz`).
 
