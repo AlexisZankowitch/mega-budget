@@ -71,6 +71,30 @@ func (h *Handler) DeleteCategory(ctx context.Context, request api.DeleteCategory
 	}, nil
 }
 
+func (h *Handler) GetCategory(ctx context.Context, request api.GetCategoryRequestObject) (api.GetCategoryResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	cat, err := h.repo.Get(ctx, request.CategoryId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.GetCategory404JSONResponse{
+				Body:    api.Error{Message: "category not found"},
+				Headers: api.GetCategory404ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		h.logger.Error("get category: db error", zap.Error(err))
+		return nil, err
+	}
+
+	return api.GetCategory200JSONResponse{
+		Body: api.Category{
+			Id:        cat.ID,
+			Name:      cat.Name,
+			CreatedAt: cat.CreatedAt,
+		},
+		Headers: api.GetCategory200ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
 func requestIDFromContext(ctx context.Context) string {
 	if id, ok := logging.RequestIDFromContext(ctx); ok {
 		return id
