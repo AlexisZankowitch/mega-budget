@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: MegaBudget API
+  version: 0.1.0
+paths:
+  /transactions:
+    post:
+      summary: Create a transaction
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionCreate"
+      responses:
+        "201":
+          description: Created
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          description: Bad request
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    TransactionCreate:
+      type: object
+      required:
+        - transaction_date
+        - amount_cents
+      properties:
+        transaction_date:
+          type: string
+          format: date
+        category_id:
+          type: integer
+          format: int64
+          nullable: true
+        amount_cents:
+          type: integer
+          format: int64
+        description:
+          type: string
+          nullable: true
+    Transaction:
+      type: object
+      required:
+        - id
+        - transaction_date
+        - amount_cents
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        transaction_date:
+          type: string
+          format: date
+        category_id:
+          type: integer
+          format: int64
+          nullable: true
+        amount_cents:
+          type: integer
+          format: int64
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string

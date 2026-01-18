@@ -55,7 +55,10 @@ func TestHealthzEndpointReportsDbAvailability(t *testing.T) {
 	})
 
 	handler := handlers.NewHealthHandler(db, config.Config{HealthTimeout: 2 * time.Second})
-	mux := httpserver.NewMux(handler)
+	mux, err := httpserver.NewMux(handler, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(mux)
 	client := &http.Client{Timeout: 5 * time.Second}
 	endpoint := server.URL + "/healthz"
