@@ -2,6 +2,8 @@ package categorieshttp
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"go.uber.org/zap"
 
@@ -45,6 +47,27 @@ func (h *Handler) CreateCategory(ctx context.Context, request api.CreateCategory
 			CreatedAt: created.CreatedAt,
 		},
 		Headers: api.CreateCategory201ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
+func (h *Handler) DeleteCategory(ctx context.Context, request api.DeleteCategoryRequestObject) (api.DeleteCategoryResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	err := h.repo.Delete(ctx, request.CategoryId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.DeleteCategory404JSONResponse{
+				Body:    api.Error{Message: "category not found"},
+				Headers: api.DeleteCategory404ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		h.logger.Error("delete category: db error", zap.Error(err))
+		return nil, err
+	}
+
+	h.logger.Info("delete category: deleted", zap.Int64("category_id", request.CategoryId))
+
+	return api.DeleteCategory204Response{
+		Headers: api.DeleteCategory204ResponseHeaders{XRequestID: requestID},
 	}, nil
 }
 

@@ -41,4 +41,8 @@ func (h *Handler) CreateCategory(ctx context.Context, request api.CreateCategory
 	return h.categories.CreateCategory(ctx, request)
 }
 
+func (h *Handler) DeleteCategory(ctx context.Context, request api.DeleteCategoryRequestObject) (api.DeleteCategoryResponseObject, error) {
+	return h.categories.DeleteCategory(ctx, request)
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)

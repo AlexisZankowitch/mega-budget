@@ -100,6 +100,9 @@ type ServerInterface interface {
 	// Create a category
 	// (POST /categories)
 	CreateCategory(w http.ResponseWriter, r *http.Request)
+	// Delete a category
+	// (DELETE /categories/{categoryId})
+	DeleteCategory(w http.ResponseWriter, r *http.Request, categoryId int64)
 	// List transactions
 	// (GET /transactions)
 	ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams)
@@ -131,6 +134,31 @@ func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCategory operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "categoryId" -------------
+	var categoryId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "categoryId", r.PathValue("categoryId"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCategory(w, r, categoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -401,6 +429,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("POST "+options.BaseURL+"/categories", wrapper.CreateCategory)
+	m.HandleFunc("DELETE "+options.BaseURL+"/categories/{categoryId}", wrapper.DeleteCategory)
 	m.HandleFunc("GET "+options.BaseURL+"/transactions", wrapper.ListTransactions)
 	m.HandleFunc("POST "+options.BaseURL+"/transactions", wrapper.CreateTransaction)
 	m.HandleFunc("DELETE "+options.BaseURL+"/transactions/{transactionId}", wrapper.DeleteTransaction)
@@ -448,6 +477,45 @@ func (response CreateCategory400JSONResponse) VisitCreateCategoryResponse(w http
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteCategoryRequestObject struct {
+	CategoryId int64 `json:"categoryId"`
+}
+
+type DeleteCategoryResponseObject interface {
+	VisitDeleteCategoryResponse(w http.ResponseWriter) error
+}
+
+type DeleteCategory204ResponseHeaders struct {
+	XRequestID string
+}
+
+type DeleteCategory204Response struct {
+	Headers DeleteCategory204ResponseHeaders
+}
+
+func (response DeleteCategory204Response) VisitDeleteCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCategory404ResponseHeaders struct {
+	XRequestID string
+}
+
+type DeleteCategory404JSONResponse struct {
+	Body    Error
+	Headers DeleteCategory404ResponseHeaders
+}
+
+func (response DeleteCategory404JSONResponse) VisitDeleteCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response.Body)
 }
@@ -682,6 +750,9 @@ type StrictServerInterface interface {
 	// Create a category
 	// (POST /categories)
 	CreateCategory(ctx context.Context, request CreateCategoryRequestObject) (CreateCategoryResponseObject, error)
+	// Delete a category
+	// (DELETE /categories/{categoryId})
+	DeleteCategory(ctx context.Context, request DeleteCategoryRequestObject) (DeleteCategoryResponseObject, error)
 	// List transactions
 	// (GET /transactions)
 	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
@@ -752,6 +823,32 @@ func (sh *strictHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateCategoryResponseObject); ok {
 		if err := validResponse.VisitCreateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCategory operation middleware
+func (sh *strictHandler) DeleteCategory(w http.ResponseWriter, r *http.Request, categoryId int64) {
+	var request DeleteCategoryRequestObject
+
+	request.CategoryId = categoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCategory(ctx, request.(DeleteCategoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCategory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCategoryResponseObject); ok {
+		if err := validResponse.VisitDeleteCategoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -904,21 +1001,22 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"AA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
