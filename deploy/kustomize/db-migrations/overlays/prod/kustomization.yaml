@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: spendtrack
+nameSuffix: -prod
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+patches:
+  - target:
+      group: batch
+      version: v1
+      kind: Job
+      name: db-migrate
+    path: patch-job.yaml

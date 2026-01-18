@@ -1,0 +1,13 @@
+.git
+.gocache
+.gomodcache
+bin
+dist
+*.test
+.env
+.env.*
+*.local
+deploy/secrets/*.env
+plans/
+*.md
+.DS_Store

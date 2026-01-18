@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: kukymbr/goose-docker:3.24.2
+          envFrom:
+            - secretRef:
+                name: app-db-secret
+          command: ["/bin/sh", "-lc"]
+          args:
+            - >
+              DATABASE_URL="postgres://$APP_DB_USER:$APP_DB_PASSWORD@postgres.databases.svc.cluster.local:5432/$APP_DB_NAME?sslmode=disable";
+              goose -dir /migrations postgres "$DATABASE_URL" up
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+      volumes:
+        - name: migrations
+          configMap:
+            name: db-migrations
