@@ -191,6 +191,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /categories:
+    post:
+      summary: Create a category
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryCreate"
+      responses:
+        "201":
+          description: Created
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          description: Bad request
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     TransactionCreate:
@@ -240,6 +273,28 @@ components:
         description:
           type: string
           nullable: true
+    CategoryCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+    Category:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
     Transaction:
       type: object
       required:

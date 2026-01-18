@@ -24,6 +24,18 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Category defines model for Category.
+type Category struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        int64     `json:"id"`
+	Name      string    `json:"name"`
+}
+
+// CategoryCreate defines model for CategoryCreate.
+type CategoryCreate struct {
+	Name string `json:"name"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Message string `json:"message"`
@@ -74,6 +86,9 @@ type ListTransactionsParams struct {
 	AfterId *int64 `form:"after_id,omitempty" json:"after_id,omitempty"`
 }
 
+// CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
+type CreateCategoryJSONRequestBody = CategoryCreate
+
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = TransactionCreate
 
@@ -82,6 +97,9 @@ type UpdateTransactionJSONRequestBody = TransactionUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Create a category
+	// (POST /categories)
+	CreateCategory(w http.ResponseWriter, r *http.Request)
 	// List transactions
 	// (GET /transactions)
 	ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams)
@@ -107,6 +125,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateCategory operation middleware
+func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListTransactions operation middleware
 func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *http.Request) {
@@ -368,6 +400,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("POST "+options.BaseURL+"/categories", wrapper.CreateCategory)
 	m.HandleFunc("GET "+options.BaseURL+"/transactions", wrapper.ListTransactions)
 	m.HandleFunc("POST "+options.BaseURL+"/transactions", wrapper.CreateTransaction)
 	m.HandleFunc("DELETE "+options.BaseURL+"/transactions/{transactionId}", wrapper.DeleteTransaction)
@@ -375,6 +408,48 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/transactions/{transactionId}", wrapper.UpdateTransaction)
 
 	return m
+}
+
+type CreateCategoryRequestObject struct {
+	Body *CreateCategoryJSONRequestBody
+}
+
+type CreateCategoryResponseObject interface {
+	VisitCreateCategoryResponse(w http.ResponseWriter) error
+}
+
+type CreateCategory201ResponseHeaders struct {
+	XRequestID string
+}
+
+type CreateCategory201JSONResponse struct {
+	Body    Category
+	Headers CreateCategory201ResponseHeaders
+}
+
+func (response CreateCategory201JSONResponse) VisitCreateCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCategory400ResponseHeaders struct {
+	XRequestID string
+}
+
+type CreateCategory400JSONResponse struct {
+	Body    Error
+	Headers CreateCategory400ResponseHeaders
+}
+
+func (response CreateCategory400JSONResponse) VisitCreateCategoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListTransactionsRequestObject struct {
@@ -604,6 +679,9 @@ func (response UpdateTransaction404JSONResponse) VisitUpdateTransactionResponse(
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Create a category
+	// (POST /categories)
+	CreateCategory(ctx context.Context, request CreateCategoryRequestObject) (CreateCategoryResponseObject, error)
 	// List transactions
 	// (GET /transactions)
 	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
@@ -648,6 +726,37 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// CreateCategory operation middleware
+func (sh *strictHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	var request CreateCategoryRequestObject
+
+	var body CreateCategoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCategory(ctx, request.(CreateCategoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCategory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCategoryResponseObject); ok {
+		if err := validResponse.VisitCreateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListTransactions operation middleware
@@ -795,20 +904,21 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

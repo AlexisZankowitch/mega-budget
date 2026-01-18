@@ -8,9 +8,12 @@ import (
 	"go.uber.org/fx/fxevent"
 
 	"zankowitch.com/go-db-app/internal/api"
+	"zankowitch.com/go-db-app/internal/categories"
+	categorieshttp "zankowitch.com/go-db-app/internal/categories/http"
 	"zankowitch.com/go-db-app/internal/config"
 	"zankowitch.com/go-db-app/internal/db"
 	"zankowitch.com/go-db-app/internal/handlers"
+	"zankowitch.com/go-db-app/internal/httpapi"
 	"zankowitch.com/go-db-app/internal/httpserver"
 	"zankowitch.com/go-db-app/internal/logging"
 	"zankowitch.com/go-db-app/internal/transactions"
@@ -27,9 +30,12 @@ func main() {
 			db.New,
 			logging.New,
 			handlers.NewHealthHandler,
+			categories.NewRepository,
+			categorieshttp.NewHandler,
 			transactions.NewRepository,
 			transactionshttp.NewHandler,
-			func(h *transactionshttp.Handler) api.StrictServerInterface { return h },
+			httpapi.NewHandler,
+			func(h *httpapi.Handler) api.StrictServerInterface { return h },
 			httpserver.NewMux,
 			httpserver.NewServer,
 		),

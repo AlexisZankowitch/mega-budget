@@ -220,8 +220,6 @@ func (h *Handler) UpdateTransaction(ctx context.Context, request api.UpdateTrans
 	}, nil
 }
 
-var _ api.StrictServerInterface = (*Handler)(nil)
-
 func stringPtrValue(v *string) string {
 	if v == nil {
 		return "<nil>"
