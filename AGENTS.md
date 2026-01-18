@@ -38,7 +38,7 @@ Config vs secrets:
   - `deploy/secrets/*.env` is ignored by git
   - `postgres-admin` secret contains admin creds
   - `spendtrack-dev-db-secret` contains `APP_DB_PASSWORD` only
-  - `spendtrack-prod-db-secret` contains `APP_DB_PASSWORD` and `DATABASE_URL`
+  - `spendtrack-prod-db-secret` contains `APP_DB_NAME`, `APP_DB_USER`, and `APP_DB_PASSWORD`
 
 ## Migrations (pressly/goose)
 - Migrations live in `migrations/` as SQL files.
@@ -46,6 +46,11 @@ Config vs secrets:
   - init tables: `categories`, `transactions`
   - indexes: `(category_id, transaction_date)` and `transaction_date`
   - seed migration inserts default categories.
+Kubernetes Job (prod):
+- Base: `deploy/kustomize/db-migrations/base`
+- Prod overlay: `deploy/kustomize/db-migrations/overlays/prod`
+- Job name in prod: `db-migrate-prod`
+- Keep `deploy/kustomize/db-migrations/base/migrations/` in sync with `migrations/` when adding new SQL files.
 
 Typical dev commands (workstation):
 - Set DB URL (no password in URL):
@@ -62,7 +67,7 @@ Typical dev commands (workstation):
   - `deploy/secrets/postgres-admin.env`
   - `deploy/secrets/spendtrack-dev-db-secret.env`
 - Apply/update secrets (example pattern):
-  - `kubectl --kubeconfig "$KCFG" -n databases create secret generic … --from-env-file=… --dry-run=client -o yaml | kubectl apply -f -`
+  - `kubectl -n databases create secret generic … --from-env-file=… --dry-run=client -o yaml | kubectl apply -f -`
 
 ## Kustomize / kubectl conventions
 Use this kubeconfig for all cluster operations:
@@ -87,12 +92,67 @@ App deployment (prod):
 - Prod overlay: `deploy/kustomize/app/overlays/prod`
 - Apply:
   - `kubectl apply -k deploy/kustomize/app/overlays/prod`
+- Update flow:
+  - Build/push a new image tag (see registry section)
+  - Update `deploy/kustomize/app/overlays/prod/patch-deployment.yaml` with the new image
+  - `kubectl apply -k deploy/kustomize/app/overlays/prod`
+  - If migrations changed, run the migration job before or right after the rollout
 
-## Coding conventions (when we implement the Go service)
+DB migrations (prod):
+- Apply:
+  - `kubectl apply -k deploy/kustomize/db-migrations/overlays/prod`
+- Re-run:
+  - `kubectl -n spendtrack delete job db-migrate-prod --ignore-not-found`
+  - `kubectl apply -k deploy/kustomize/db-migrations/overlays/prod`
+  - `kubectl -n spendtrack logs -l job-name=db-migrate-prod --tail=200`
+
+## Coding conventions
 - Keep `cmd/<app>/main.go` thin.
 - Put logic in `internal/` packages (config/db/http/handlers).
 - No ORM: SQL-first.
-- Add a minimal health endpoint early (`/healthz`) and later metrics (`/metrics`).
+- Add a minimal health endpoint (`/healthz`).
+
+## Local Docker Registry (LAN-only, HTTPS)
+
+We use a private image registry hosted on the homelab server (same machine as the k0s node).
+
+### Endpoint
+- Registry: `registry.lan:5000`
+- Do not use the IP (`192.168.1.23:5000`) when tagging images, the TLS cert is for `registry.lan`.
+
+### Server setup
+- Registry runs via Docker Compose in: `/srv/registry/compose.yaml`
+- Persistent storage: `/srv/registry/data`
+- TLS material: `/srv/registry/certs/`
+  - `registry.crt`, `registry.key` (used by the registry)
+  - `ca.crt` (CA to trust on clients and the k0s node)
+
+Start/stop:
+- `cd /srv/registry && sudo docker compose up -d`
+- `cd /srv/registry && sudo docker compose down`
+
+### Name resolution requirement
+Both workstation and server must resolve `registry.lan` to the server LAN IP (e.g. via router DNS or `/etc/hosts`).
+
+### Trust requirements (no “insecure registry”)
+To push/pull without insecure settings, the CA must be trusted:
+- On the server (k0s node):
+  - `sudo cp /srv/registry/certs/ca.crt /usr/local/share/ca-certificates/registry-ca.crt`
+  - `sudo update-ca-certificates`
+- On the workstation:
+  - Trust the same `ca.crt` (System trust store or Docker certs.d)
+
+### Build & push workflow
+Tag with the registry host, then push:
+- `docker build -t registry.lan:5000/<app>:<tag> .`
+- `docker push registry.lan:5000/<app>:<tag>`
+
+### Kubernetes usage
+Deployments must reference images like:
+- `image: registry.lan:5000/<app>:<tag>`
+
+(Optional) keep `imagePullPolicy: Always` for `:dev` tags.
+
 
 ## Planning for non-trivial changes
 For any non-trivial change, create a new plan file under `plans/`:
