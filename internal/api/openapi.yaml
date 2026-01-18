@@ -224,6 +224,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    get:
+      summary: List categories
+      operationId: listCategories
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryList"
   /categories/{categoryId}:
     parameters:
       - in: path
@@ -351,6 +366,15 @@ components:
         created_at:
           type: string
           format: date-time
+    CategoryList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
     Transaction:
       type: object
       required:

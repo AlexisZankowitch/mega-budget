@@ -36,6 +36,11 @@ type CategoryCreate struct {
 	Name string `json:"name"`
 }
 
+// CategoryList defines model for CategoryList.
+type CategoryList struct {
+	Items []Category `json:"items"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Message string `json:"message"`
@@ -97,6 +102,9 @@ type UpdateTransactionJSONRequestBody = TransactionUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List categories
+	// (GET /categories)
+	ListCategories(w http.ResponseWriter, r *http.Request)
 	// Create a category
 	// (POST /categories)
 	CreateCategory(w http.ResponseWriter, r *http.Request)
@@ -131,6 +139,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCategories(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateCategory operation middleware
 func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http.Request) {
@@ -456,6 +478,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/categories", wrapper.ListCategories)
 	m.HandleFunc("POST "+options.BaseURL+"/categories", wrapper.CreateCategory)
 	m.HandleFunc("DELETE "+options.BaseURL+"/categories/{categoryId}", wrapper.DeleteCategory)
 	m.HandleFunc("GET "+options.BaseURL+"/categories/{categoryId}", wrapper.GetCategory)
@@ -466,6 +489,30 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/transactions/{transactionId}", wrapper.UpdateTransaction)
 
 	return m
+}
+
+type ListCategoriesRequestObject struct {
+}
+
+type ListCategoriesResponseObject interface {
+	VisitListCategoriesResponse(w http.ResponseWriter) error
+}
+
+type ListCategories200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListCategories200JSONResponse struct {
+	Body    CategoryList
+	Headers ListCategories200ResponseHeaders
+}
+
+func (response ListCategories200JSONResponse) VisitListCategoriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCategoryRequestObject struct {
@@ -818,6 +865,9 @@ func (response UpdateTransaction404JSONResponse) VisitUpdateTransactionResponse(
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List categories
+	// (GET /categories)
+	ListCategories(ctx context.Context, request ListCategoriesRequestObject) (ListCategoriesResponseObject, error)
 	// Create a category
 	// (POST /categories)
 	CreateCategory(ctx context.Context, request CreateCategoryRequestObject) (CreateCategoryResponseObject, error)
@@ -871,6 +921,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListCategories operation middleware
+func (sh *strictHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
+	var request ListCategoriesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCategories(ctx, request.(ListCategoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCategories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCategoriesResponseObject); ok {
+		if err := validResponse.VisitListCategoriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // CreateCategory operation middleware
@@ -1101,22 +1175,22 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xYW2/bNhT+K8LZHhVbuWAPelvSoTC2dcPQAQOKImDEY4WFeSl5NCww9N8HUnIs6lI7",
-	"bWIXrd8kmzqX7/vI80lrKLQ0WqEiB/kaXHGPkoXLG0ZYavvgr43VBi0JDP8UFhkhv2Xk75baSn8FnBGe",
-	"kZAIKdCDQcjBkRWqhDoFwaO1QtFPV9t1QhGWaP1CxST6pb0IdQoWP1bCIof8nQ/XLk275bx/jKjvPmBB",
-	"PuCmj5uwbNjNfgnDqrHwv1ir7TCqROdYuUfgzcKx2G8tU44VJLQaZmBSV4puiw11e2BbtFDcTrChqtWK",
-	"3a0QcrIVjkb4DOo5usIKs+liIslnSIW28NzyltuopGE1YzIahEljbHcqrEPTlMiOQtZTgf9yPHdBuQO9",
-	"34SjIXaCUMYXP1pcQg4/zLeH17w9uebdPVM/pmPWsoch/SHgjqL+NvxE6VMo9RGEWupw9gny1cHvWLLr",
-	"ipdIyc9/LiCFf9G60ARks/NZ5mvVBhUzAnK4nGWzS0jBMLoP2M5b5FrojW504ulgvrIFhxyavfc4tpo2",
-	"0NG15mGIFVoRqvAgM2YlivDo/INrsGwEtEtevWlSx3B5FsIPzmjlmmIvsvNnz97kjcTQtu8PtHtkHG1I",
-	"/s/ZXw0IZ4tX/j5+pP0vERwViaVAmyy1TciyQqhyBmmnrL5KfAFXWfZsrTVzdKSva8aTlsnD9Van4Cop",
-	"mbc/LbIJS4ot/GlXk/P15p8Fr5tSVthstliir8LvkUQjpVwN+3ijkw2+B2X26uWZfaMpWepK8SPx2rAR",
-	"8ZpCiSNHy2ukadKyg2zvP3498f/M/L9G6pFvmGUSKRTybg3CJ/RDaPOykcN2o0P/4O9m3mkG6vf+COkM",
-	"19D6qPi8K3rbXThe58cKgzrbQldCCoKpmi4vIAXJ/hOykpBfZFkKUqjm7nyk2rRPw0IVq4pj0u0g0SrR",
-	"NrnDpbaY0L1wiXcMnpOxCh0xSxtPMVLmlD3pl3JTWadtSBWkYFgpVIBvKjNbEtrnyyz4k/KGl44nSeUF",
-	"j5y++/4KTp7vwlN4sKPNE46fT/ja7nvNy1jb4Wvsgd1t9Op2MrhHMLgUMdAbUPN1524vo9vX7MnrHt/r",
-	"Uvx9ZMrufpK67FBb/mR6X8j09lSw2/dGW/9LrW8KphqRXfOl7aCDrv24t9eg+2ZV/63OuO9kRzcaHkzv",
-	"uv4/AAD//y5t6WjdGwAA",
+	"H4sIAAAAAAAC/+xY227jNhD9FWHaR8VWLuiD3ppssTDabotiCxRYLAJGHCtcWCRDjooGhv69ICXFoi6x",
+	"k3XsxSZvkj2e2zkzPPQaMlVoJVGShXQNNrvFgvnHK0aYK3PvnrVRGg0J9N9kBhkhv2bk3pbKFO4JOCM8",
+	"IVEgxED3GiEFS0bIHKoYBA9shaSfLjZ2QhLmaJyhZAU6056HKgaDd6UwyCH95Nw1pnE3nc8PHtXNF8zI",
+	"OWzruPJmw2p2C+itHnP/m7A0dC4Ii/DhR4NLSOGH+abx86br84eWVw+BmDHsfli+9zaWzi/GKDPMo0Br",
+	"Wb5Dna3hmO+PhknLMhJKDiOwQpWSrrOWSTtAnTXlXk+QQ5arFbtZIaRkShz18AwmcrSZEbqtYiLIM5hL",
+	"m/Zc84ZqQUrDbMZYPXATh73dSvgOTFOcPwpYT2381/dzWyu3dG8fI92dmedPdcfL35q/QfoUSJ0HIZfK",
+	"7z5BLjv4HXN2WfIcKfr5zwXE8C8a64uAZHY6S1yuSqNkWkAK57Nkdg4xaEa3vrfzpnNN63P0NHFoMJfY",
+	"gkMKjjxXGzNXhdVK2vonZ0niT1IlCaX/NdN6JTL/+/kXW/ezJtGup4anqy83gAX++BViuEXG0fjY/5z8",
+	"hXclWjpZvHPvoXXzXSQ4ShJLgSZaKhORYZmQ+QziTlZ9qHxwWxYFc7LBtyDqtKqKQSs70qt6TT2cfjXi",
+	"aOlS8fu9t6nZiVXILEfYagDS6d6jjwFUZ8QPh1IMF3vkXy05Ruq6ZDxqkDwSA+vORqxlYb1zO+M7X7ff",
+	"LHhVp7LCei+FFH3nPw8oGjDlYljHBxW1/T0oshcvj+wHRdFSlZIfCdcajQDXeHwNv0eaBi05yHgfcv++",
+	"EvzfI/XA18ywAskn8mkNwgV053V7TUxhM+jQX/zdyFt1U/XZrZCODnlcA3zsGo7neVeiZ2eT6EoUgmAq",
+	"p/MziKFg/4miLCA9S5IYCiHrt9ORbOM+DAuZrUqOUbeCSMlImegGl8pgRLfCRk5cOUzGMrTEDLXyayTN",
+	"KSXXT+WqNFYZH8pTQbNcSN++qchsSWj2F1nwJ8X197MnUeUFV07/ovINbJ5XoSm8qg3Gf4uu7V4BX0ba",
+	"Dm/8B1a3wS33TeAeQeBSgEDvgJqvO287Cd0+Z9+07vG1LoV/JU3J3UehSw418m+i94VEb48F23VvMPpf",
+	"K31j0OUI7eo/JQ960DX/g+500H23rP9ez7hXMtE1hwend1X9HwAA//83+yTVlx0AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

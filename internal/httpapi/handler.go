@@ -49,4 +49,8 @@ func (h *Handler) GetCategory(ctx context.Context, request api.GetCategoryReques
 	return h.categories.GetCategory(ctx, request)
 }
 
+func (h *Handler) ListCategories(ctx context.Context, request api.ListCategoriesRequestObject) (api.ListCategoriesResponseObject, error) {
+	return h.categories.ListCategories(ctx, request)
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)

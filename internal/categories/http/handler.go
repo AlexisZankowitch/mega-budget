@@ -95,6 +95,29 @@ func (h *Handler) GetCategory(ctx context.Context, request api.GetCategoryReques
 	}, nil
 }
 
+func (h *Handler) ListCategories(ctx context.Context, request api.ListCategoriesRequestObject) (api.ListCategoriesResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	cats, err := h.repo.List(ctx)
+	if err != nil {
+		h.logger.Error("list categories: db error", zap.Error(err))
+		return nil, err
+	}
+
+	items := make([]api.Category, 0, len(cats))
+	for _, c := range cats {
+		items = append(items, api.Category{
+			Id:        c.ID,
+			Name:      c.Name,
+			CreatedAt: c.CreatedAt,
+		})
+	}
+
+	return api.ListCategories200JSONResponse{
+		Body:    api.CategoryList{Items: items},
+		Headers: api.ListCategories200ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
 func requestIDFromContext(ctx context.Context) string {
 	if id, ok := logging.RequestIDFromContext(ctx); ok {
 		return id
