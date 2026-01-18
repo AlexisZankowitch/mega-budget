@@ -22,6 +22,7 @@ type transactionListResponse struct {
 func TestTransactionsHTTPCRUD(t *testing.T) {
 	// Subtests share state and must not be run in isolation or parallel.
 	var created transactionResponse
+	var second transactionResponse
 
 	t.Run("create transaction", func(t *testing.T) {
 		body := []byte(`{"transaction_date":"2026-02-01","amount_cents":-1257,"description":"lunch"}`)
@@ -39,6 +40,23 @@ func TestTransactionsHTTPCRUD(t *testing.T) {
 			t.Fatalf("decode response: %v", err)
 		}
 		if created.ID == 0 {
+			t.Fatalf("expected id to be set")
+		}
+	})
+
+	t.Run("create second transaction", func(t *testing.T) {
+		body := []byte(`{"transaction_date":"2026-01-31","amount_cents":-500,"description":"snack"}`)
+		resp := doRequest(t, http.MethodPost, testServer.URL+"/transactions", body)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("status = %d, want 201", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&second); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if second.ID == 0 {
 			t.Fatalf("expected id to be set")
 		}
 	})
@@ -66,6 +84,44 @@ func TestTransactionsHTTPCRUD(t *testing.T) {
 		}
 		if len(list.Items) == 0 {
 			t.Fatalf("expected at least one transaction")
+		}
+	})
+
+	t.Run("list transactions with cursor", func(t *testing.T) {
+		resp := doRequest(t, http.MethodGet, testServer.URL+"/transactions?limit=1", nil)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+
+		var first transactionListResponse
+		if err := json.NewDecoder(resp.Body).Decode(&first); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		if len(first.Items) != 1 {
+			t.Fatalf("expected 1 transaction, got %d", len(first.Items))
+		}
+
+		cursorDate := first.Items[0].TransactionDate
+		cursorID := first.Items[0].ID
+		url := testServer.URL + "/transactions?after_date=" + cursorDate + "&after_id=" + itoa(cursorID)
+		resp = doRequest(t, http.MethodGet, url, nil)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+
+		var next transactionListResponse
+		if err := json.NewDecoder(resp.Body).Decode(&next); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		if len(next.Items) < 1 {
+			t.Fatalf("expected at least 1 transaction after cursor, got %d", len(next.Items))
+		}
+		if next.Items[0].ID == cursorID {
+			t.Fatalf("expected next item to differ from cursor")
 		}
 	})
 
