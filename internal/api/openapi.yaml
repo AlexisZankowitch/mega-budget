@@ -44,6 +44,32 @@ paths:
         schema:
           type: integer
           format: int64
+    get:
+      summary: Get a transaction
+      operationId: getTransaction
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "404":
+          description: Not found
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Delete a transaction
       operationId: deleteTransaction

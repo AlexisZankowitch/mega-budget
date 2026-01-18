@@ -90,6 +90,35 @@ func (h *Handler) DeleteTransaction(ctx context.Context, request api.DeleteTrans
 	}, nil
 }
 
+func (h *Handler) GetTransaction(ctx context.Context, request api.GetTransactionRequestObject) (api.GetTransactionResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	row, err := h.repo.Get(ctx, request.TransactionId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.GetTransaction404JSONResponse{
+				Body:    api.Error{Message: "transaction not found"},
+				Headers: api.GetTransaction404ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		h.logger.Error("get transaction: db error", zap.Error(err))
+		return nil, err
+	}
+
+	response := api.Transaction{
+		Id:              row.ID,
+		TransactionDate: types.Date{Time: row.TransactionDate},
+		CategoryId:      row.CategoryID,
+		AmountCents:     row.AmountCents,
+		Description:     row.Description,
+		CreatedAt:       row.CreatedAt,
+	}
+
+	return api.GetTransaction200JSONResponse{
+		Body:    response,
+		Headers: api.GetTransaction200ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)
 
 func stringPtrValue(v *string) string {
