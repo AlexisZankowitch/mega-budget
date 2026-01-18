@@ -1,4 +1,4 @@
-package transactionshttp
+package httpapi
 
 import (
 	"context"
@@ -10,20 +10,19 @@ import (
 	"go.uber.org/zap"
 
 	"zankowitch.com/go-db-app/internal/api"
-	"zankowitch.com/go-db-app/internal/logging"
 	"zankowitch.com/go-db-app/internal/transactions"
 )
 
-type Handler struct {
+type TransactionsHandler struct {
 	repo   *transactions.Repository
 	logger *zap.Logger
 }
 
-func NewHandler(repo *transactions.Repository, logger *zap.Logger) *Handler {
-	return &Handler{repo: repo, logger: logger}
+func NewTransactionsHandler(repo *transactions.Repository, logger *zap.Logger) *TransactionsHandler {
+	return &TransactionsHandler{repo: repo, logger: logger}
 }
 
-func (h *Handler) CreateTransaction(ctx context.Context, request api.CreateTransactionRequestObject) (api.CreateTransactionResponseObject, error) {
+func (h *TransactionsHandler) CreateTransaction(ctx context.Context, request api.CreateTransactionRequestObject) (api.CreateTransactionResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	logger := h.logger.With(zap.String("request_id", requestID))
 	if request.Body == nil {
@@ -70,7 +69,7 @@ func (h *Handler) CreateTransaction(ctx context.Context, request api.CreateTrans
 	}, nil
 }
 
-func (h *Handler) DeleteTransaction(ctx context.Context, request api.DeleteTransactionRequestObject) (api.DeleteTransactionResponseObject, error) {
+func (h *TransactionsHandler) DeleteTransaction(ctx context.Context, request api.DeleteTransactionRequestObject) (api.DeleteTransactionResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	err := h.repo.Delete(ctx, request.TransactionId)
 	if err != nil {
@@ -91,7 +90,7 @@ func (h *Handler) DeleteTransaction(ctx context.Context, request api.DeleteTrans
 	}, nil
 }
 
-func (h *Handler) ListTransactions(ctx context.Context, request api.ListTransactionsRequestObject) (api.ListTransactionsResponseObject, error) {
+func (h *TransactionsHandler) ListTransactions(ctx context.Context, request api.ListTransactionsRequestObject) (api.ListTransactionsResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	logger := h.logger.With(zap.String("request_id", requestID))
 
@@ -148,7 +147,7 @@ func (h *Handler) ListTransactions(ctx context.Context, request api.ListTransact
 	}, nil
 }
 
-func (h *Handler) GetTransaction(ctx context.Context, request api.GetTransactionRequestObject) (api.GetTransactionResponseObject, error) {
+func (h *TransactionsHandler) GetTransaction(ctx context.Context, request api.GetTransactionRequestObject) (api.GetTransactionResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	row, err := h.repo.Get(ctx, request.TransactionId)
 	if err != nil {
@@ -177,7 +176,7 @@ func (h *Handler) GetTransaction(ctx context.Context, request api.GetTransaction
 	}, nil
 }
 
-func (h *Handler) UpdateTransaction(ctx context.Context, request api.UpdateTransactionRequestObject) (api.UpdateTransactionResponseObject, error) {
+func (h *TransactionsHandler) UpdateTransaction(ctx context.Context, request api.UpdateTransactionRequestObject) (api.UpdateTransactionResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	logger := h.logger.With(zap.String("request_id", requestID))
 	if request.Body == nil {
@@ -225,11 +224,4 @@ func stringPtrValue(v *string) string {
 		return "<nil>"
 	}
 	return *v
-}
-
-func requestIDFromContext(ctx context.Context) string {
-	if id, ok := logging.RequestIDFromContext(ctx); ok {
-		return id
-	}
-	return ""
 }

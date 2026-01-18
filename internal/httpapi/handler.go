@@ -4,16 +4,14 @@ import (
 	"context"
 
 	"zankowitch.com/go-db-app/internal/api"
-	categorieshttp "zankowitch.com/go-db-app/internal/categories/http"
-	transactionshttp "zankowitch.com/go-db-app/internal/transactions/http"
 )
 
 type Handler struct {
-	transactions *transactionshttp.Handler
-	categories   *categorieshttp.Handler
+	transactions *TransactionsHandler
+	categories   *CategoriesHandler
 }
 
-func NewHandler(transactions *transactionshttp.Handler, categories *categorieshttp.Handler) *Handler {
+func NewHandler(transactions *TransactionsHandler, categories *CategoriesHandler) *Handler {
 	return &Handler{transactions: transactions, categories: categories}
 }
 

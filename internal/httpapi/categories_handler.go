@@ -1,4 +1,4 @@
-package categorieshttp
+package httpapi
 
 import (
 	"context"
@@ -9,19 +9,18 @@ import (
 
 	"zankowitch.com/go-db-app/internal/api"
 	"zankowitch.com/go-db-app/internal/categories"
-	"zankowitch.com/go-db-app/internal/logging"
 )
 
-type Handler struct {
+type CategoriesHandler struct {
 	repo   *categories.Repository
 	logger *zap.Logger
 }
 
-func NewHandler(repo *categories.Repository, logger *zap.Logger) *Handler {
-	return &Handler{repo: repo, logger: logger}
+func NewCategoriesHandler(repo *categories.Repository, logger *zap.Logger) *CategoriesHandler {
+	return &CategoriesHandler{repo: repo, logger: logger}
 }
 
-func (h *Handler) CreateCategory(ctx context.Context, request api.CreateCategoryRequestObject) (api.CreateCategoryResponseObject, error) {
+func (h *CategoriesHandler) CreateCategory(ctx context.Context, request api.CreateCategoryRequestObject) (api.CreateCategoryResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	logger := h.logger.With(zap.String("request_id", requestID))
 	if request.Body == nil {
@@ -50,7 +49,7 @@ func (h *Handler) CreateCategory(ctx context.Context, request api.CreateCategory
 	}, nil
 }
 
-func (h *Handler) DeleteCategory(ctx context.Context, request api.DeleteCategoryRequestObject) (api.DeleteCategoryResponseObject, error) {
+func (h *CategoriesHandler) DeleteCategory(ctx context.Context, request api.DeleteCategoryRequestObject) (api.DeleteCategoryResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	err := h.repo.Delete(ctx, request.CategoryId)
 	if err != nil {
@@ -71,7 +70,7 @@ func (h *Handler) DeleteCategory(ctx context.Context, request api.DeleteCategory
 	}, nil
 }
 
-func (h *Handler) GetCategory(ctx context.Context, request api.GetCategoryRequestObject) (api.GetCategoryResponseObject, error) {
+func (h *CategoriesHandler) GetCategory(ctx context.Context, request api.GetCategoryRequestObject) (api.GetCategoryResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	cat, err := h.repo.Get(ctx, request.CategoryId)
 	if err != nil {
@@ -95,7 +94,7 @@ func (h *Handler) GetCategory(ctx context.Context, request api.GetCategoryReques
 	}, nil
 }
 
-func (h *Handler) ListCategories(ctx context.Context, request api.ListCategoriesRequestObject) (api.ListCategoriesResponseObject, error) {
+func (h *CategoriesHandler) ListCategories(ctx context.Context, request api.ListCategoriesRequestObject) (api.ListCategoriesResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	cats, err := h.repo.List(ctx)
 	if err != nil {
@@ -118,7 +117,7 @@ func (h *Handler) ListCategories(ctx context.Context, request api.ListCategories
 	}, nil
 }
 
-func (h *Handler) UpdateCategory(ctx context.Context, request api.UpdateCategoryRequestObject) (api.UpdateCategoryResponseObject, error) {
+func (h *CategoriesHandler) UpdateCategory(ctx context.Context, request api.UpdateCategoryRequestObject) (api.UpdateCategoryResponseObject, error) {
 	requestID := requestIDFromContext(ctx)
 	logger := h.logger.With(zap.String("request_id", requestID))
 	if request.Body == nil {
@@ -149,11 +148,4 @@ func (h *Handler) UpdateCategory(ctx context.Context, request api.UpdateCategory
 		},
 		Headers: api.UpdateCategory200ResponseHeaders{XRequestID: requestID},
 	}, nil
-}
-
-func requestIDFromContext(ctx context.Context) string {
-	if id, ok := logging.RequestIDFromContext(ctx); ok {
-		return id
-	}
-	return ""
 }

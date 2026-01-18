@@ -18,14 +18,12 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"zankowitch.com/go-db-app/internal/categories"
-	categorieshttp "zankowitch.com/go-db-app/internal/categories/http"
 	"zankowitch.com/go-db-app/internal/config"
 	"zankowitch.com/go-db-app/internal/handlers"
 	"zankowitch.com/go-db-app/internal/httpapi"
 	"zankowitch.com/go-db-app/internal/httpserver"
 	"zankowitch.com/go-db-app/internal/logging"
 	"zankowitch.com/go-db-app/internal/transactions"
-	transactionshttp "zankowitch.com/go-db-app/internal/transactions/http"
 )
 
 var (
@@ -54,8 +52,8 @@ func startTestServer(db *sql.DB) *httptest.Server {
 	health := handlers.NewHealthHandler(db, config.Config{HealthTimeout: 2 * time.Second})
 	txRepo := transactions.NewRepository(db)
 	catRepo := categories.NewRepository(db)
-	txHandler := transactionshttp.NewHandler(txRepo, logger)
-	catHandler := categorieshttp.NewHandler(catRepo, logger)
+	txHandler := httpapi.NewTransactionsHandler(txRepo, logger)
+	catHandler := httpapi.NewCategoriesHandler(catRepo, logger)
 	apiHandler := httpapi.NewHandler(txHandler, catHandler)
 
 	mux, err := httpserver.NewMux(health, apiHandler)

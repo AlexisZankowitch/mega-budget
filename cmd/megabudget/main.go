@@ -9,7 +9,6 @@ import (
 
 	"zankowitch.com/go-db-app/internal/api"
 	"zankowitch.com/go-db-app/internal/categories"
-	categorieshttp "zankowitch.com/go-db-app/internal/categories/http"
 	"zankowitch.com/go-db-app/internal/config"
 	"zankowitch.com/go-db-app/internal/db"
 	"zankowitch.com/go-db-app/internal/handlers"
@@ -17,7 +16,6 @@ import (
 	"zankowitch.com/go-db-app/internal/httpserver"
 	"zankowitch.com/go-db-app/internal/logging"
 	"zankowitch.com/go-db-app/internal/transactions"
-	transactionshttp "zankowitch.com/go-db-app/internal/transactions/http"
 )
 
 func main() {
@@ -31,9 +29,9 @@ func main() {
 			logging.New,
 			handlers.NewHealthHandler,
 			categories.NewRepository,
-			categorieshttp.NewHandler,
+			httpapi.NewCategoriesHandler,
 			transactions.NewRepository,
-			transactionshttp.NewHandler,
+			httpapi.NewTransactionsHandler,
 			httpapi.NewHandler,
 			func(h *httpapi.Handler) api.StrictServerInterface { return h },
 			httpserver.NewMux,
