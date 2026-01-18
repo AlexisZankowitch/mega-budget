@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/oapi-codegen/runtime/types"
 	"go.uber.org/zap"
@@ -87,6 +88,63 @@ func (h *Handler) DeleteTransaction(ctx context.Context, request api.DeleteTrans
 
 	return api.DeleteTransaction204Response{
 		Headers: api.DeleteTransaction204ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
+func (h *Handler) ListTransactions(ctx context.Context, request api.ListTransactionsRequestObject) (api.ListTransactionsResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	logger := h.logger.With(zap.String("request_id", requestID))
+
+	limit := int32(50)
+	if request.Params.Limit != nil {
+		limit = *request.Params.Limit
+	}
+
+	var startDate *time.Time
+	if request.Params.StartDate != nil {
+		start := request.Params.StartDate.Time
+		startDate = &start
+	}
+
+	hasAfterDate := request.Params.AfterDate != nil
+	hasAfterID := request.Params.AfterId != nil
+	hasCursor := hasAfterDate && hasAfterID
+	if hasAfterDate != hasAfterID {
+		return api.ListTransactions400JSONResponse{
+			Body:    api.Error{Message: "after_date and after_id must be provided together"},
+			Headers: api.ListTransactions400ResponseHeaders{XRequestID: requestID},
+		}, nil
+	}
+
+	var afterDate *time.Time
+	var afterID *int64
+	if hasCursor {
+		after := request.Params.AfterDate.Time
+		afterDate = &after
+		afterID = request.Params.AfterId
+	}
+
+	rows, err := h.repo.ListAfter(ctx, int(limit), startDate, afterDate, afterID)
+	if err != nil {
+		logger.Error("list transactions: db error", zap.Error(err))
+		return nil, err
+	}
+
+	items := make([]api.Transaction, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, api.Transaction{
+			Id:              row.ID,
+			TransactionDate: types.Date{Time: row.TransactionDate},
+			CategoryId:      row.CategoryID,
+			AmountCents:     row.AmountCents,
+			Description:     row.Description,
+			CreatedAt:       row.CreatedAt,
+		})
+	}
+
+	return api.ListTransactions200JSONResponse{
+		Body:    api.TransactionList{Items: items},
+		Headers: api.ListTransactions200ResponseHeaders{XRequestID: requestID},
 	}, nil
 }
 

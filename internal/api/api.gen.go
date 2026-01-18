@@ -47,12 +47,31 @@ type TransactionCreate struct {
 	TransactionDate openapi_types.Date `json:"transaction_date"`
 }
 
+// TransactionList defines model for TransactionList.
+type TransactionList struct {
+	Items []Transaction `json:"items"`
+}
+
 // TransactionUpdate defines model for TransactionUpdate.
 type TransactionUpdate struct {
 	AmountCents     int64              `json:"amount_cents"`
 	CategoryId      *int64             `json:"category_id"`
 	Description     *string            `json:"description"`
 	TransactionDate openapi_types.Date `json:"transaction_date"`
+}
+
+// ListTransactionsParams defines parameters for ListTransactions.
+type ListTransactionsParams struct {
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// StartDate Include transactions on or before this date.
+	StartDate *openapi_types.Date `form:"start_date,omitempty" json:"start_date,omitempty"`
+
+	// AfterDate Cursor date for pagination.
+	AfterDate *openapi_types.Date `form:"after_date,omitempty" json:"after_date,omitempty"`
+
+	// AfterId Cursor id for pagination.
+	AfterId *int64 `form:"after_id,omitempty" json:"after_id,omitempty"`
 }
 
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
@@ -63,6 +82,9 @@ type UpdateTransactionJSONRequestBody = TransactionUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List transactions
+	// (GET /transactions)
+	ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams)
 	// Create a transaction
 	// (POST /transactions)
 	CreateTransaction(w http.ResponseWriter, r *http.Request)
@@ -85,6 +107,57 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListTransactions operation middleware
+func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTransactionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "start_date" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "start_date", r.URL.Query(), &params.StartDate)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "start_date", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "after_date" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_date", r.URL.Query(), &params.AfterDate)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_date", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "after_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_id", r.URL.Query(), &params.AfterId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTransactions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateTransaction(w http.ResponseWriter, r *http.Request) {
@@ -295,12 +368,55 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/transactions", wrapper.ListTransactions)
 	m.HandleFunc("POST "+options.BaseURL+"/transactions", wrapper.CreateTransaction)
 	m.HandleFunc("DELETE "+options.BaseURL+"/transactions/{transactionId}", wrapper.DeleteTransaction)
 	m.HandleFunc("GET "+options.BaseURL+"/transactions/{transactionId}", wrapper.GetTransaction)
 	m.HandleFunc("PUT "+options.BaseURL+"/transactions/{transactionId}", wrapper.UpdateTransaction)
 
 	return m
+}
+
+type ListTransactionsRequestObject struct {
+	Params ListTransactionsParams
+}
+
+type ListTransactionsResponseObject interface {
+	VisitListTransactionsResponse(w http.ResponseWriter) error
+}
+
+type ListTransactions200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListTransactions200JSONResponse struct {
+	Body    TransactionList
+	Headers ListTransactions200ResponseHeaders
+}
+
+func (response ListTransactions200JSONResponse) VisitListTransactionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTransactions400ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListTransactions400JSONResponse struct {
+	Body    Error
+	Headers ListTransactions400ResponseHeaders
+}
+
+func (response ListTransactions400JSONResponse) VisitListTransactionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateTransactionRequestObject struct {
@@ -488,6 +604,9 @@ func (response UpdateTransaction404JSONResponse) VisitUpdateTransactionResponse(
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List transactions
+	// (GET /transactions)
+	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
 	// Create a transaction
 	// (POST /transactions)
 	CreateTransaction(ctx context.Context, request CreateTransactionRequestObject) (CreateTransactionResponseObject, error)
@@ -529,6 +648,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListTransactions operation middleware
+func (sh *strictHandler) ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams) {
+	var request ListTransactionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTransactions(ctx, request.(ListTransactionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTransactions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTransactionsResponseObject); ok {
+		if err := validResponse.VisitListTransactionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // CreateTransaction operation middleware
@@ -650,17 +795,20 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

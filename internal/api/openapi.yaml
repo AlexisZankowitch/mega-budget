@@ -36,6 +36,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    get:
+      summary: List transactions
+      operationId: listTransactions
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+          required: false
+        - in: query
+          name: start_date
+          description: Include transactions on or before this date.
+          schema:
+            type: string
+            format: date
+          required: false
+        - in: query
+          name: after_date
+          description: Cursor date for pagination.
+          schema:
+            type: string
+            format: date
+          required: false
+        - in: query
+          name: after_id
+          description: Cursor id for pagination.
+          schema:
+            type: integer
+            format: int64
+          required: false
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionList"
+        "400":
+          description: Bad request
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /transactions/{transactionId}:
     parameters:
       - in: path
@@ -156,6 +212,15 @@ components:
         description:
           type: string
           nullable: true
+    TransactionList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
     TransactionUpdate:
       type: object
       required:
