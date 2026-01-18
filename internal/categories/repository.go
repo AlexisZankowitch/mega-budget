@@ -53,15 +53,14 @@ func (r *Repository) Get(ctx context.Context, id int64) (Category, error) {
 	return c, nil
 }
 
-func (r *Repository) List(ctx context.Context, limit, offset int) ([]Category, error) {
+func (r *Repository) List(ctx context.Context) ([]Category, error) {
 	const query = `
 		SELECT id, name, created_at
 		FROM categories
 		ORDER BY name ASC, id ASC
-		LIMIT $1 OFFSET $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}

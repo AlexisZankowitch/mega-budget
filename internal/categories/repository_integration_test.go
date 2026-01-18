@@ -59,7 +59,7 @@ func TestRepositoryCRUD(t *testing.T) {
 			t.Fatalf("create second: %v", err)
 		}
 
-		list, err := repo.List(ctx, 50, 0)
+		list, err := repo.List(ctx)
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
