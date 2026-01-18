@@ -119,6 +119,49 @@ func (h *Handler) GetTransaction(ctx context.Context, request api.GetTransaction
 	}, nil
 }
 
+func (h *Handler) UpdateTransaction(ctx context.Context, request api.UpdateTransactionRequestObject) (api.UpdateTransactionResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	logger := h.logger.With(zap.String("request_id", requestID))
+	if request.Body == nil {
+		logger.Warn("update transaction: missing request body")
+		return api.UpdateTransaction400JSONResponse{
+			Body:    api.Error{Message: "missing request body"},
+			Headers: api.UpdateTransaction400ResponseHeaders{XRequestID: requestID},
+		}, nil
+	}
+
+	updated, err := h.repo.Update(ctx, request.TransactionId, transactions.UpdateInput{
+		TransactionDate: request.Body.TransactionDate.Time,
+		CategoryID:      request.Body.CategoryId,
+		AmountCents:     request.Body.AmountCents,
+		Description:     request.Body.Description,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.UpdateTransaction404JSONResponse{
+				Body:    api.Error{Message: "transaction not found"},
+				Headers: api.UpdateTransaction404ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		logger.Error("update transaction: db error", zap.Error(err))
+		return nil, err
+	}
+
+	response := api.Transaction{
+		Id:              updated.ID,
+		TransactionDate: types.Date{Time: updated.TransactionDate},
+		CategoryId:      updated.CategoryID,
+		AmountCents:     updated.AmountCents,
+		Description:     updated.Description,
+		CreatedAt:       updated.CreatedAt,
+	}
+
+	return api.UpdateTransaction200JSONResponse{
+		Body:    response,
+		Headers: api.UpdateTransaction200ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)
 
 func stringPtrValue(v *string) string {

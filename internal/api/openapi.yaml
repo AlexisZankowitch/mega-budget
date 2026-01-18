@@ -70,6 +70,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    put:
+      summary: Update a transaction
+      operationId: updateTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionUpdate"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          description: Bad request
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Delete a transaction
       operationId: deleteTransaction
@@ -95,6 +138,25 @@ paths:
 components:
   schemas:
     TransactionCreate:
+      type: object
+      required:
+        - transaction_date
+        - amount_cents
+      properties:
+        transaction_date:
+          type: string
+          format: date
+        category_id:
+          type: integer
+          format: int64
+          nullable: true
+        amount_cents:
+          type: integer
+          format: int64
+        description:
+          type: string
+          nullable: true
+    TransactionUpdate:
       type: object
       required:
         - transaction_date

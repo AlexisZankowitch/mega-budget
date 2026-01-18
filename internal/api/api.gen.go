@@ -47,8 +47,19 @@ type TransactionCreate struct {
 	TransactionDate openapi_types.Date `json:"transaction_date"`
 }
 
+// TransactionUpdate defines model for TransactionUpdate.
+type TransactionUpdate struct {
+	AmountCents     int64              `json:"amount_cents"`
+	CategoryId      *int64             `json:"category_id"`
+	Description     *string            `json:"description"`
+	TransactionDate openapi_types.Date `json:"transaction_date"`
+}
+
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = TransactionCreate
+
+// UpdateTransactionJSONRequestBody defines body for UpdateTransaction for application/json ContentType.
+type UpdateTransactionJSONRequestBody = TransactionUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -61,6 +72,9 @@ type ServerInterface interface {
 	// Get a transaction
 	// (GET /transactions/{transactionId})
 	GetTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
+	// Update a transaction
+	// (PUT /transactions/{transactionId})
+	UpdateTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -127,6 +141,31 @@ func (siw *ServerInterfaceWrapper) GetTransaction(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTransaction(w, r, transactionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTransaction operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTransaction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "transactionId" -------------
+	var transactionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transactionId", r.PathValue("transactionId"), &transactionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transactionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTransaction(w, r, transactionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -259,6 +298,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/transactions", wrapper.CreateTransaction)
 	m.HandleFunc("DELETE "+options.BaseURL+"/transactions/{transactionId}", wrapper.DeleteTransaction)
 	m.HandleFunc("GET "+options.BaseURL+"/transactions/{transactionId}", wrapper.GetTransaction)
+	m.HandleFunc("PUT "+options.BaseURL+"/transactions/{transactionId}", wrapper.UpdateTransaction)
 
 	return m
 }
@@ -386,6 +426,66 @@ func (response GetTransaction404JSONResponse) VisitGetTransactionResponse(w http
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type UpdateTransactionRequestObject struct {
+	TransactionId int64 `json:"transactionId"`
+	Body          *UpdateTransactionJSONRequestBody
+}
+
+type UpdateTransactionResponseObject interface {
+	VisitUpdateTransactionResponse(w http.ResponseWriter) error
+}
+
+type UpdateTransaction200ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateTransaction200JSONResponse struct {
+	Body    Transaction
+	Headers UpdateTransaction200ResponseHeaders
+}
+
+func (response UpdateTransaction200JSONResponse) VisitUpdateTransactionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateTransaction400ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateTransaction400JSONResponse struct {
+	Body    Error
+	Headers UpdateTransaction400ResponseHeaders
+}
+
+func (response UpdateTransaction400JSONResponse) VisitUpdateTransactionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateTransaction404ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateTransaction404JSONResponse struct {
+	Body    Error
+	Headers UpdateTransaction404ResponseHeaders
+}
+
+func (response UpdateTransaction404JSONResponse) VisitUpdateTransactionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Create a transaction
@@ -397,6 +497,9 @@ type StrictServerInterface interface {
 	// Get a transaction
 	// (GET /transactions/{transactionId})
 	GetTransaction(ctx context.Context, request GetTransactionRequestObject) (GetTransactionResponseObject, error)
+	// Update a transaction
+	// (PUT /transactions/{transactionId})
+	UpdateTransaction(ctx context.Context, request UpdateTransactionRequestObject) (UpdateTransactionResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -511,19 +614,53 @@ func (sh *strictHandler) GetTransaction(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// UpdateTransaction operation middleware
+func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
+	var request UpdateTransactionRequestObject
+
+	request.TransactionId = transactionId
+
+	var body UpdateTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTransaction(ctx, request.(UpdateTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTransactionResponseObject); ok {
+		if err := validResponse.VisitUpdateTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xW32/TMBD+V6KDx7TJWMVD3ihDU4UYCPGANE2VF19ST41tzhekqsr/juz0R9J0VIit",
-	"8LA3x/Xdffd939ldQ24qazRqdpCtweULrERYfiAy5BeWjEVihWG7QudEiX7JK4uQgWNSuoSmiYHwR60I",
-	"JWS3u4N38faguX/AnKGJ4RsJ7UTOyuhhBVGZWvM832IqDFWCIQOl+e0EdumUZiyRfL5cMJaGVnMlj0bo",
-	"erkU90uEjKnGoxkIBaOc+7BOAikYR6wq3JfdthuDRJeTstsuHimyP/8IuCEY3tMz9wgGkIZoDshXEo6k",
-	"ifvc9ro+IdP7cPI/EetPif97Pk9ROWTPZ1C6MGFQFHt08AlLMa1liRy9+zKDGH4iudAEpOOLceqxGota",
-	"WAUZXI7T8SXEYAUvArdJB0XYsMYFu3pBhN+dSciglao7Ym0v6Hhq5MoH5EYz6hArrF2qPEQnD64ltL0F",
-	"/Oo1YQEZvEr210SyuSOSoTuaPm1ejbDhrNGu9cub9OI5ALSle77Y8OAHYYFCIoX630dfWypGsyv/3Q/Z",
-	"/BYpiZpVoZCiwlDEJHKlyzHEHWSHhvEAJmn6ZN219++RvqZCRhs9z9dbE4Orq0rQasdsJCLuKRD3HZqs",
-	"O18z2bSQltjOX9+zV2H/0LM930yGLd2YaEv1WUWePL/IN4ajwtRa/iOJW0EOJY6hxCM3zjXyb6VLzzXy",
-	"nz++GOGJjXCNPHSBFSQq5IDldg3K1/TPlH+9ReXT9UYfDl+Fbv2T/xiau6ZpfgUAAP//xwVncakKAAA=",
+	"H4sIAAAAAAAC/+xW32/TMBD+V6KDR6/NWMVD3hhDU4UYCIGENE2VF18yT41t7AtSVeV/R7b7I2kyysRW",
+	"0Nib69p3333f57ssIdeV0QoVOciW4PIbrHhYvrNWW78wVhu0JDFsV+gcL9EvaWEQMnBkpSqhaRhY/F5L",
+	"iwKyy83BK7Y+qK9vMSdoGHyxXDmek9Sqn4FXulY0y9eYCm0rTpCBVPR6AptwUhGWaH28nBOW2i5mUgze",
+	"UPV8zq/nCBnZGgcjWOSEYuavtQIITnhEssJt2nW5DAS63EqzruKOJNvzd4Drg6EtPTOPoAepj2aHfClg",
+	"IAzrctupeo9Mb8PJf0Ss+xL/53zuo3IPe1+NeGbvPuz5CFIVOrQZSR4dfMCSn9aiRErefJoCgx9oXSgC",
+	"0tHxKPVYtUHFjYQMTkbp6AQYGE43gdtxC0XYMNqFx+4F4X53KiCDaPR2g4q1oKNTLRb+Qq4VoQp3uTFz",
+	"mYfb41sXCY091K9eWiwggxfjbZMdrzrsuP+2mi5tXo2w4YxWLvrlVXr8GABi6o4vVjz4NnKDXKAN+b8d",
+	"fY5UHE3P/O/uldV/iRSoSBYSbVJom5DluVTlCFgL2a5hPIBJmj5YdXF6DdR1ykWy0vNwtTUMXF1V3C42",
+	"zCY8oY4CrOvQ8bL1ayqaCGmO8f11PXsW9nc92/HNpF/ShU7WVB9U5Mnji3yhKSl0rcRfkjgKsisxgxIH",
+	"Os450i+lSw/15D++fzbCAxvhHKnvAsMtr5AClsslSJ/Tjyk/vXnlw3WePuxOhXb+vV8MzRUDUw/YLn6T",
+	"HHTQrT6DfmvQPVnXP9UZ95+86Ojh3vRump8BAAD//390lC9LDwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
