@@ -75,7 +75,7 @@ func (r *Repository) Get(ctx context.Context, id int64) (Transaction, error) {
 	return t, nil
 }
 
-func (r *Repository) ListAfter(ctx context.Context, limit int, startDate *time.Time, afterDate *time.Time, afterID *int64) ([]Transaction, error) {
+func (r *Repository) ListAfter(ctx context.Context, limit int, fromDate *time.Time, toDate *time.Time, categoryID *int64, txType *string, afterDate *time.Time, afterID *int64) ([]Transaction, error) {
 	const baseQuery = `
 		SELECT id, transaction_date, category_id, (amount * 100)::bigint, description, created_at
 		FROM transactions
@@ -84,9 +84,24 @@ func (r *Repository) ListAfter(ctx context.Context, limit int, startDate *time.T
 	clauses := make([]string, 0, 2)
 	args := make([]any, 0, 4)
 
-	if startDate != nil {
+	if fromDate != nil {
+		clauses = append(clauses, fmt.Sprintf("transaction_date >= $%d", len(args)+1))
+		args = append(args, *fromDate)
+	}
+	if toDate != nil {
 		clauses = append(clauses, fmt.Sprintf("transaction_date <= $%d", len(args)+1))
-		args = append(args, *startDate)
+		args = append(args, *toDate)
+	}
+	if categoryID != nil {
+		clauses = append(clauses, fmt.Sprintf("category_id = $%d", len(args)+1))
+		args = append(args, *categoryID)
+	}
+	if txType != nil {
+		if *txType == "spending" {
+			clauses = append(clauses, "amount < 0")
+		} else if *txType == "income" {
+			clauses = append(clauses, "amount > 0")
+		}
 	}
 	if afterDate != nil && afterID != nil {
 		clauses = append(clauses, fmt.Sprintf("(transaction_date, id) < ($%d, $%d)", len(args)+1, len(args)+2))

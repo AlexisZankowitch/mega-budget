@@ -24,6 +24,12 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ListTransactionsParamsType.
+const (
+	Income   ListTransactionsParamsType = "income"
+	Spending ListTransactionsParamsType = "spending"
+)
+
 // Category defines model for Category.
 type Category struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -126,8 +132,20 @@ type GetTransactionsSummaryParams struct {
 type ListTransactionsParams struct {
 	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
 
+	// FromDate Include transactions on or after this date.
+	FromDate *openapi_types.Date `form:"from_date,omitempty" json:"from_date,omitempty"`
+
 	// StartDate Include transactions on or before this date.
 	StartDate *openapi_types.Date `form:"start_date,omitempty" json:"start_date,omitempty"`
+
+	// ToDate Include transactions on or before this date.
+	ToDate *openapi_types.Date `form:"to_date,omitempty" json:"to_date,omitempty"`
+
+	// CategoryId Filter by category id.
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+
+	// Type Filter by spending (amount < 0) or income (amount > 0).
+	Type *ListTransactionsParamsType `form:"type,omitempty" json:"type,omitempty"`
 
 	// AfterDate Cursor date for pagination.
 	AfterDate *openapi_types.Date `form:"after_date,omitempty" json:"after_date,omitempty"`
@@ -135,6 +153,9 @@ type ListTransactionsParams struct {
 	// AfterId Cursor id for pagination.
 	AfterId *int64 `form:"after_id,omitempty" json:"after_id,omitempty"`
 }
+
+// ListTransactionsParamsType defines parameters for ListTransactions.
+type ListTransactionsParamsType string
 
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CategoryCreate
@@ -384,11 +405,43 @@ func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "from_date" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from_date", r.URL.Query(), &params.FromDate)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from_date", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "start_date" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "start_date", r.URL.Query(), &params.StartDate)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "start_date", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to_date" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to_date", r.URL.Query(), &params.ToDate)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to_date", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "type", r.URL.Query(), &params.Type)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
 		return
 	}
 
@@ -1566,27 +1619,28 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

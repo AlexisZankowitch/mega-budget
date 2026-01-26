@@ -49,11 +49,39 @@ paths:
             maximum: 200
           required: false
         - in: query
+          name: from_date
+          description: Include transactions on or after this date.
+          schema:
+            type: string
+            format: date
+          required: false
+        - in: query
           name: start_date
           description: Include transactions on or before this date.
           schema:
             type: string
             format: date
+          required: false
+        - in: query
+          name: to_date
+          description: Include transactions on or before this date.
+          schema:
+            type: string
+            format: date
+          required: false
+        - in: query
+          name: category_id
+          description: Filter by category id.
+          schema:
+            type: integer
+            format: int64
+          required: false
+        - in: query
+          name: type
+          description: Filter by spending (amount < 0) or income (amount > 0).
+          schema:
+            type: string
+            enum: [spending, income]
           required: false
         - in: query
           name: after_date

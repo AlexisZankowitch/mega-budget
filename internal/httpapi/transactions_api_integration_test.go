@@ -153,3 +153,76 @@ func TestTransactionsHTTPCRUD(t *testing.T) {
 		}
 	})
 }
+
+func TestTransactionsListFilters(t *testing.T) {
+	category := createTestCategory(t, "Filter-Category")
+
+	createTestTransaction(t, category.ID, "2032-05-10", -1200, "may-spending")
+	createTestTransaction(t, category.ID, "2032-05-12", 5000, "may-income")
+	createTestTransaction(t, category.ID, "2032-04-20", -700, "april-spending")
+
+	t.Run("filters by month/category/spending", func(t *testing.T) {
+		url := testServer.URL + "/transactions?from_date=2032-05-01&to_date=2032-05-31&category_id=" + itoa(category.ID) + "&type=spending&limit=50"
+		resp := doRequest(t, http.MethodGet, url, nil)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+
+		var list transactionListResponse
+		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		if len(list.Items) != 1 {
+			t.Fatalf("expected 1 transaction, got %d", len(list.Items))
+		}
+		if list.Items[0].Description == nil || *list.Items[0].Description != "may-spending" {
+			t.Fatalf("unexpected transaction: %+v", list.Items[0])
+		}
+	})
+
+	t.Run("filters by income type", func(t *testing.T) {
+		url := testServer.URL + "/transactions?from_date=2032-05-01&to_date=2032-05-31&category_id=" + itoa(category.ID) + "&type=income&limit=50"
+		resp := doRequest(t, http.MethodGet, url, nil)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+
+		var list transactionListResponse
+		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		if len(list.Items) != 1 {
+			t.Fatalf("expected 1 transaction, got %d", len(list.Items))
+		}
+		if list.Items[0].Description == nil || *list.Items[0].Description != "may-income" {
+			t.Fatalf("unexpected transaction: %+v", list.Items[0])
+		}
+	})
+
+	t.Run("start_date aliases to to_date", func(t *testing.T) {
+		url := testServer.URL + "/transactions?start_date=2032-05-11&category_id=" + itoa(category.ID) + "&limit=50"
+		resp := doRequest(t, http.MethodGet, url, nil)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+
+		var list transactionListResponse
+		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		if len(list.Items) == 0 {
+			t.Fatalf("expected at least 1 transaction")
+		}
+		for _, item := range list.Items {
+			if item.TransactionDate > "2032-05-11" {
+				t.Fatalf("unexpected transaction after start_date: %+v", item)
+			}
+		}
+	})
+}

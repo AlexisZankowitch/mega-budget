@@ -105,6 +105,42 @@ func (h *TransactionsHandler) ListTransactions(ctx context.Context, request api.
 		startDate = &start
 	}
 
+	var fromDate *time.Time
+	if request.Params.FromDate != nil {
+		from := request.Params.FromDate.Time
+		fromDate = &from
+	}
+
+	var toDate *time.Time
+	if request.Params.ToDate != nil {
+		to := request.Params.ToDate.Time
+		toDate = &to
+	}
+
+	if startDate != nil {
+		if toDate != nil {
+			return api.ListTransactions400JSONResponse{
+				Body:    api.Error{Message: "start_date cannot be combined with to_date"},
+				Headers: api.ListTransactions400ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+		toDate = startDate
+	}
+
+	var txType *string
+	if request.Params.Type != nil {
+		switch string(*request.Params.Type) {
+		case "spending", "income":
+			t := string(*request.Params.Type)
+			txType = &t
+		default:
+			return api.ListTransactions400JSONResponse{
+				Body:    api.Error{Message: "type must be spending or income"},
+				Headers: api.ListTransactions400ResponseHeaders{XRequestID: requestID},
+			}, nil
+		}
+	}
+
 	hasAfterDate := request.Params.AfterDate != nil
 	hasAfterID := request.Params.AfterId != nil
 	hasCursor := hasAfterDate && hasAfterID
@@ -123,7 +159,7 @@ func (h *TransactionsHandler) ListTransactions(ctx context.Context, request api.
 		afterID = request.Params.AfterId
 	}
 
-	rows, err := h.repo.ListAfter(ctx, int(limit), startDate, afterDate, afterID)
+	rows, err := h.repo.ListAfter(ctx, int(limit), fromDate, toDate, request.Params.CategoryId, txType, afterDate, afterID)
 	if err != nil {
 		logger.Error("list transactions: db error", zap.Error(err))
 		return nil, err

@@ -68,7 +68,7 @@ func TestRepositoryCRUD(t *testing.T) {
 			t.Fatalf("create second: %v", err)
 		}
 
-		list, err := repo.ListAfter(ctx, 10, nil, nil, nil)
+		list, err := repo.ListAfter(ctx, 10, nil, nil, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -93,7 +93,7 @@ func TestRepositoryCRUD(t *testing.T) {
 	})
 
 	t.Run("read next page with cursor", func(t *testing.T) {
-		list, err := repo.ListAfter(ctx, 1, nil, nil, nil)
+		list, err := repo.ListAfter(ctx, 1, nil, nil, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("list first page: %v", err)
 		}
@@ -103,7 +103,7 @@ func TestRepositoryCRUD(t *testing.T) {
 
 		cursorDate := list[0].TransactionDate
 		cursorID := list[0].ID
-		next, err := repo.ListAfter(ctx, 10, nil, &cursorDate, &cursorID)
+		next, err := repo.ListAfter(ctx, 10, nil, nil, nil, nil, &cursorDate, &cursorID)
 		if err != nil {
 			t.Fatalf("list next page: %v", err)
 		}
@@ -114,7 +114,7 @@ func TestRepositoryCRUD(t *testing.T) {
 
 	t.Run("read from start date", func(t *testing.T) {
 		startDate := date.AddDate(0, 0, -1)
-		list, err := repo.ListAfter(ctx, 10, &startDate, nil, nil)
+		list, err := repo.ListAfter(ctx, 10, nil, &startDate, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("list from date: %v", err)
 		}
