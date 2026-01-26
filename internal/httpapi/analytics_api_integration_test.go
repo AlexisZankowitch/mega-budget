@@ -10,6 +10,7 @@ type summaryRow struct {
 	CategoryID int64   `json:"category_id"`
 	Values     []int64 `json:"values"`
 	Total      int64   `json:"total"`
+	Average    int64   `json:"average"`
 }
 
 type summarySection struct {
@@ -63,9 +64,15 @@ func TestTransactionsSummaryAnalytics(t *testing.T) {
 	if !ok || len(spendingA.Values) != 12 || spendingA.Values[0] != 1000 {
 		t.Fatalf("spending for categoryA: %+v", spendingA)
 	}
+	if spendingA.Average != 83 {
+		t.Fatalf("spending avg for categoryA = %d, want 83", spendingA.Average)
+	}
 	spendingB, ok := findSummaryRow(summary.Spending.Rows, categoryB.ID)
 	if !ok || len(spendingB.Values) != 12 || spendingB.Values[1] != 3000 {
 		t.Fatalf("spending for categoryB: %+v", spendingB)
+	}
+	if spendingB.Average != 250 {
+		t.Fatalf("spending avg for categoryB = %d, want 250", spendingB.Average)
 	}
 	if summary.Spending.Total != 4000 {
 		t.Fatalf("spending total = %d, want 4000", summary.Spending.Total)
@@ -78,9 +85,15 @@ func TestTransactionsSummaryAnalytics(t *testing.T) {
 	if !ok || len(incomeA.Values) != 12 || incomeA.Values[0] != 2000 {
 		t.Fatalf("income for categoryA: %+v", incomeA)
 	}
+	if incomeA.Average != 166 {
+		t.Fatalf("income avg for categoryA = %d, want 166", incomeA.Average)
+	}
 	incomeB, ok := findSummaryRow(summary.Income.Rows, categoryB.ID)
 	if !ok || len(incomeB.Values) != 12 || incomeB.Values[2] != 4000 {
 		t.Fatalf("income for categoryB: %+v", incomeB)
+	}
+	if incomeB.Average != 333 {
+		t.Fatalf("income avg for categoryB = %d, want 333", incomeB.Average)
 	}
 	if summary.Income.Total != 6000 {
 		t.Fatalf("income total = %d, want 6000", summary.Income.Total)

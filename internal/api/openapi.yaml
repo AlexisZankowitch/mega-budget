@@ -568,6 +568,7 @@ components:
         - category_id
         - values
         - total
+        - average
       properties:
         category_id:
           type: integer
@@ -578,6 +579,9 @@ components:
             type: integer
             format: int64
         total:
+          type: integer
+          format: int64
+        average:
           type: integer
           format: int64
     MonthlySavings:

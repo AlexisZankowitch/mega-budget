@@ -100,7 +100,6 @@ func (h *AnalyticsHandler) GetMonthlySavings(ctx context.Context, request api.Ge
 	for _, v := range values {
 		total += v
 	}
-
 	return api.GetMonthlySavings200JSONResponse{
 		Body: api.MonthlySavings{
 			Year:   request.Params.Year,
@@ -140,10 +139,12 @@ func buildSummarySection(categoriesList []categories.Category, rows []transactio
 			total += v
 			columnTotals[i] += v
 		}
+		average := total / 12
 		rowsOut = append(rowsOut, api.TransactionsSummaryRow{
 			CategoryId: c.ID,
 			Values:     values,
 			Total:      total,
+			Average:    average,
 		})
 		grandTotal += total
 	}
