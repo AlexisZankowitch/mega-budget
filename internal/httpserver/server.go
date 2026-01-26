@@ -28,6 +28,21 @@ func NewMux(healthHandler http.Handler, transactionsHandler api.StrictServerInte
 		return nil, err
 	}
 
+	mux.HandleFunc("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		data, err := swagger.MarshalJSON()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(data)
+	})
+
+	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(scalarDocsHTML))
+	})
+
 	handler := api.NewStrictHandler(transactionsHandler, nil)
 	api.HandlerWithOptions(handler, api.StdHTTPServerOptions{
 		BaseRouter:  mux,
@@ -41,6 +56,26 @@ func NewMux(healthHandler http.Handler, transactionsHandler api.StrictServerInte
 
 	return mux, nil
 }
+
+const scalarDocsHTML = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MegaBudget API Docs</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script>
+      Scalar.createApiReference('#app', {
+        url: '/openapi.json',
+        hideClientButton: true
+      })
+    </script>
+  </body>
+</html>
+`
 
 func NewServer(cfg config.Config, mux *http.ServeMux, logger *zap.Logger, lc fx.Lifecycle) *http.Server {
 	srv := &http.Server{
