@@ -338,6 +338,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /analytics/transactions-summary:
+    get:
+      summary: Get monthly spending and income summary by category
+      operationId: getTransactionsSummary
+      parameters:
+        - in: query
+          name: year
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionsSummary"
+        "400":
+          description: Bad request
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     TransactionCreate:
@@ -425,6 +460,63 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Category"
+    TransactionsSummary:
+      type: object
+      required:
+        - year
+        - months
+        - spending
+        - income
+      properties:
+        year:
+          type: integer
+          format: int32
+        months:
+          type: array
+          items:
+            type: integer
+            format: int32
+        spending:
+          $ref: "#/components/schemas/TransactionsSummarySection"
+        income:
+          $ref: "#/components/schemas/TransactionsSummarySection"
+    TransactionsSummarySection:
+      type: object
+      required:
+        - rows
+        - column_totals
+        - total
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionsSummaryRow"
+        column_totals:
+          type: array
+          items:
+            type: integer
+            format: int64
+        total:
+          type: integer
+          format: int64
+    TransactionsSummaryRow:
+      type: object
+      required:
+        - category_id
+        - values
+        - total
+      properties:
+        category_id:
+          type: integer
+          format: int64
+        values:
+          type: array
+          items:
+            type: integer
+            format: int64
+        total:
+          type: integer
+          format: int64
     Transaction:
       type: object
       required:

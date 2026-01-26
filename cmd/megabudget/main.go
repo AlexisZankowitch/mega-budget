@@ -32,6 +32,7 @@ func main() {
 			httpapi.NewCategoriesHandler,
 			transactions.NewRepository,
 			httpapi.NewTransactionsHandler,
+			httpapi.NewAnalyticsHandler,
 			httpapi.NewHandler,
 			func(h *httpapi.Handler) api.StrictServerInterface { return h },
 			httpserver.NewMux,

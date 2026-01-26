@@ -54,7 +54,8 @@ func startTestServer(db *sql.DB) *httptest.Server {
 	catRepo := categories.NewRepository(db)
 	txHandler := httpapi.NewTransactionsHandler(txRepo, logger)
 	catHandler := httpapi.NewCategoriesHandler(catRepo, logger)
-	apiHandler := httpapi.NewHandler(txHandler, catHandler)
+	analyticsHandler := httpapi.NewAnalyticsHandler(txRepo, catRepo, logger)
+	apiHandler := httpapi.NewHandler(txHandler, catHandler, analyticsHandler)
 
 	mux, err := httpserver.NewMux(health, apiHandler)
 	if err != nil {

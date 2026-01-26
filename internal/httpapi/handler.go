@@ -9,10 +9,11 @@ import (
 type Handler struct {
 	transactions *TransactionsHandler
 	categories   *CategoriesHandler
+	analytics    *AnalyticsHandler
 }
 
-func NewHandler(transactions *TransactionsHandler, categories *CategoriesHandler) *Handler {
-	return &Handler{transactions: transactions, categories: categories}
+func NewHandler(transactions *TransactionsHandler, categories *CategoriesHandler, analytics *AnalyticsHandler) *Handler {
+	return &Handler{transactions: transactions, categories: categories, analytics: analytics}
 }
 
 func (h *Handler) CreateTransaction(ctx context.Context, request api.CreateTransactionRequestObject) (api.CreateTransactionResponseObject, error) {
@@ -53,6 +54,10 @@ func (h *Handler) ListCategories(ctx context.Context, request api.ListCategories
 
 func (h *Handler) UpdateCategory(ctx context.Context, request api.UpdateCategoryRequestObject) (api.UpdateCategoryResponseObject, error) {
 	return h.categories.UpdateCategory(ctx, request)
+}
+
+func (h *Handler) GetTransactionsSummary(ctx context.Context, request api.GetTransactionsSummaryRequestObject) (api.GetTransactionsSummaryResponseObject, error) {
+	return h.analytics.GetTransactionsSummary(ctx, request)
 }
 
 var _ api.StrictServerInterface = (*Handler)(nil)

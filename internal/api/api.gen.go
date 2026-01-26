@@ -82,6 +82,33 @@ type TransactionUpdate struct {
 	TransactionDate openapi_types.Date `json:"transaction_date"`
 }
 
+// TransactionsSummary defines model for TransactionsSummary.
+type TransactionsSummary struct {
+	Income   TransactionsSummarySection `json:"income"`
+	Months   []int32                    `json:"months"`
+	Spending TransactionsSummarySection `json:"spending"`
+	Year     int32                      `json:"year"`
+}
+
+// TransactionsSummaryRow defines model for TransactionsSummaryRow.
+type TransactionsSummaryRow struct {
+	CategoryId int64   `json:"category_id"`
+	Total      int64   `json:"total"`
+	Values     []int64 `json:"values"`
+}
+
+// TransactionsSummarySection defines model for TransactionsSummarySection.
+type TransactionsSummarySection struct {
+	ColumnTotals []int64                  `json:"column_totals"`
+	Rows         []TransactionsSummaryRow `json:"rows"`
+	Total        int64                    `json:"total"`
+}
+
+// GetTransactionsSummaryParams defines parameters for GetTransactionsSummary.
+type GetTransactionsSummaryParams struct {
+	Year int32 `form:"year" json:"year"`
+}
+
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
 	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
@@ -110,6 +137,9 @@ type UpdateTransactionJSONRequestBody = TransactionUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get monthly spending and income summary by category
+	// (GET /analytics/transactions-summary)
+	GetTransactionsSummary(w http.ResponseWriter, r *http.Request, params GetTransactionsSummaryParams)
 	// List categories
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request)
@@ -150,6 +180,40 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetTransactionsSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetTransactionsSummary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTransactionsSummaryParams
+
+	// ------------- Required query parameter "year" -------------
+
+	if paramValue := r.URL.Query().Get("year"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "year", r.URL.Query(), &params.Year)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTransactionsSummary(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListCategories operation middleware
 func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http.Request) {
@@ -514,6 +578,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/analytics/transactions-summary", wrapper.GetTransactionsSummary)
 	m.HandleFunc("GET "+options.BaseURL+"/categories", wrapper.ListCategories)
 	m.HandleFunc("POST "+options.BaseURL+"/categories", wrapper.CreateCategory)
 	m.HandleFunc("DELETE "+options.BaseURL+"/categories/{categoryId}", wrapper.DeleteCategory)
@@ -526,6 +591,48 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/transactions/{transactionId}", wrapper.UpdateTransaction)
 
 	return m
+}
+
+type GetTransactionsSummaryRequestObject struct {
+	Params GetTransactionsSummaryParams
+}
+
+type GetTransactionsSummaryResponseObject interface {
+	VisitGetTransactionsSummaryResponse(w http.ResponseWriter) error
+}
+
+type GetTransactionsSummary200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetTransactionsSummary200JSONResponse struct {
+	Body    TransactionsSummary
+	Headers GetTransactionsSummary200ResponseHeaders
+}
+
+func (response GetTransactionsSummary200JSONResponse) VisitGetTransactionsSummaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetTransactionsSummary400ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetTransactionsSummary400JSONResponse struct {
+	Body    Error
+	Headers GetTransactionsSummary400ResponseHeaders
+}
+
+func (response GetTransactionsSummary400JSONResponse) VisitGetTransactionsSummaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListCategoriesRequestObject struct {
@@ -962,6 +1069,9 @@ func (response UpdateTransaction404JSONResponse) VisitUpdateTransactionResponse(
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Get monthly spending and income summary by category
+	// (GET /analytics/transactions-summary)
+	GetTransactionsSummary(ctx context.Context, request GetTransactionsSummaryRequestObject) (GetTransactionsSummaryResponseObject, error)
 	// List categories
 	// (GET /categories)
 	ListCategories(ctx context.Context, request ListCategoriesRequestObject) (ListCategoriesResponseObject, error)
@@ -1021,6 +1131,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetTransactionsSummary operation middleware
+func (sh *strictHandler) GetTransactionsSummary(w http.ResponseWriter, r *http.Request, params GetTransactionsSummaryParams) {
+	var request GetTransactionsSummaryRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTransactionsSummary(ctx, request.(GetTransactionsSummaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTransactionsSummary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTransactionsSummaryResponseObject); ok {
+		if err := validResponse.VisitGetTransactionsSummaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListCategories operation middleware
@@ -1308,23 +1444,26 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xYS2/jNhD+K8K0R8VWHuhBtyZbLIy226LYAgUWi4ARxwoXFqmQo6KBof9ekJJiUY/Y",
-	"SW25SHyT7NE8vm8eHK4hUVmuJEoyEK/BJPeYMfd4wwhTpR/tc65VjpoEun8SjYyQ3zKyb0ulM/sEnBGe",
-	"kcgQQqDHHCEGQ1rIFMoQBPdkhaQfrjZyQhKmqK2gZBla0Y6GMgSND4XQyCH+YtXVomHbna9PGtXdN0zI",
-	"KmziuHFi/Wh2M+iknlP/izDUVy4IM//he41LiOG7+Qb4eY36/Any8skQ05o99sN32p5z58+cHyLan7RW",
-	"uq81Q2NYuoPiRnBI92fNpGEJCSX7FlimCkm3SZOoO2RSUkNxO5J7slit2N0KISZd4KCGVyQ6R5NokTdR",
-	"jBh5RWHQBp7bhlvPpb43Q0XTUxP62G6tpxZNYyV1FLJeCvx/x3MblFvQ20fHaNfM65tGS8tY3zhROkKp",
-	"1SDkUrneJ8h6B79iyq4LniIFP/6+gBD+Rm1cEBDNzmeR9VXlKFkuIIbLWTS7hBByRvcO23mNXA19ii5N",
-	"LBvMOrbgEINNnpuNmI3C5Eqa6pOLKHKDWklC6b5meb4Sift+/s1UeFZJtOtQcunqwvVogd9+hhDukXHU",
-	"zvZfZ3/gQ4GGzhYf7LsvXf8XCI6SxFKgDpZKB6RZImQ6g7DlVZcqZ9wUWcbsqcRBELSgKkPIlRnAqmpT",
-	"T8O1YhwNXSv+uHeY6p5Y+pllE7bskXS+d+tDBFUe8elYCuFqj/lXHTkG4rpmPKiZPFIGVsgGrMnCque2",
-	"yne+bv5Z8LJyZYVVX/JT9IP73UtRL1Ou+nF8UkGD76TMXh2e2U+KgqUqJD8SrxUbHq/hcBv+iDROWjRJ",
-	"eU/Zf98J/x+ROuTnTLMMyTnyZQ3CGrTzutlCY9gUOnQbf9vy1nNT+TWEvBhItepkNtEUq4+BO02xt5nm",
-	"b3WAvZMSrhK4N5pb5/vnz9af24LD9f9QoKvDugGsRCYIxmr98gJCyNg/IisyiC+iKIRMyOrtfKALhF1s",
-	"FjJZFRyDdgSBkoHSwR0ulcaA7oUJbNQWqCEPDTFNzVoz4ObYhtR15abQRmlnyvGTs1RIB9+YZbYk1Puz",
-	"LPiL7Lp7jxe24IP1uO4FwKnVTbgteuW/ZV9sX60cZtj2b9Im3hq926PT4niExZE8BjoDar5uve20QHZz",
-	"9rRDHn+HJP+KdmyNfJa6aKqSPy2TB1omO1mwfZ/0Sv+gK+Wkg+44i+X/LOtPu+Xb2C396V2W/wYAAP//",
-	"Vmb/uk4hAAA=",
+	"H4sIAAAAAAAC/+xZ3W7jNhN9FWK+71KxnR/0QndNtiiCtttitwUKLIKAkcYOFxKpkFS3hqF3L0hKtqgf",
+	"W0lseZH4ToqY4cyZM8M59AoikWaCI9cKwhWo6BFTah9vqMaFkEvznEmRodQM7ZdIItUY31Nt3uZCpuYJ",
+	"YqrxTLMUIQC9zBBCUFoyvoAiABZ7axnXP1xt1jGucYHSLOQ0RbO0YaEIQOJTziTGEH4x5sqlQd2du7VF",
+	"8fAVI20MVnHc2GXtaIZtaFdtM/8rU7ptnGlM/Yf/S5xDCP+bboCflqhP15AX642olHTZDt9a2+bOX1l8",
+	"iGh/klLIttUUlaKLAYarhV22/5SUKxppJnh7B5qKnOv7qCLqACZFJRT3PdzjeZLQhwQh1DLHTgsvIHqM",
+	"KpIsq6Lo2eQFhaE38NxXufVcanvTVTQtM4GP7c56qqWpr6SOkqznAv96PHdBuQO9fXSMes28vGnUrPT1",
+	"jVNKh6RUfc7TlHadmYxHwnXegemsTH3GdXZTwfWjz406qJcX3X3D40QAKkMem9hf5csSqRzkQANg+3/r",
+	"UGreBBVEAyH+JL51TCY7KNeBjtA0Gbj2H5rk2I9/3w7barLu8HqDyquBSFRZaaMhkjzl99bYK90OQIpv",
+	"L2pL9Xx1mB2OfwM560/QiLEfOfPvjM+FHVGYNk0EfsMFvc7jBWry4x+3Bn+UyiIJs8n5ZGb8ExlymjEI",
+	"4XIym1xCABkti3BKOU2WmkVqWmsb6kxtesACbYc3SaHm420MIfyMuqtlGMuSpqhRKgi/mJYBITzlaL+5",
+	"ua0qnw0QrhM63DvrMWWcpXkK4XkHpHfGlMoEV44xF7OZIw7XyK3rNMsSFlnnp1+VY9lmt2dywKXB6+rw",
+	"+y8QwCPS2Ia9gr/PPuFTjkqf3X4w7/7q8hthMXLN5gwlmQtJtKQR44sJ1KFodnqz99UeA3SzcEdI1zQm",
+	"0jk6Xmyms1fEMxQjtsUmS1J1WEJ5TFyPJeVK8rAk0VpzFAFMy7eygXTS14wtN5tlB2SQJ62OTB0PXuMQ",
+	"qUFVBJAJ1YGVG5DXss4VLip9LeLl3mEqp/HC75SmQRStJJ3vffeuBDmP4lOB752BDllCe8t3uqq+3MaF",
+	"cyVBNxH7FP1g/+5R1GPKVTuOj4JU+I6a2avDZ/aj0GQuch4fKa8uG15eg94poj9ps1HKe+yj+x3k3xzc",
+	"fvK7hkIzgm5mwk2hD54MuwfsuwCyvINq7k5gpFOsvIAYdIq9TZq/1QPsnZSwI3DraK5LxK2zdV03DROF",
+	"CUuZhu0qkP7rVODFbLZDEwZNbG55lOQxknoERHAiJHnAuZBI9CNTxEQ9sdc4bQ+VplJXF2odbvbdzTVd",
+	"ucmlEtJuZfOT0QXjFr6+nelco9zfzix+1r72VueZLXgMQf49KKp3M6tbteiV/w69WL/UP8xh2/4NZ2TV",
+	"6P1ucRKORxCO2stA44CarmpvgwRkk7MnDXl8Dan9HwcHXEbDOMfPSUyOKCYbLNitJ73SP6ikHPWgO46w",
+	"/M5Yf9KWb0Nb+qd3UfwXAAD//5kC+HTIJwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
