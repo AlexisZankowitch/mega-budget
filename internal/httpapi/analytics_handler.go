@@ -67,6 +67,51 @@ func (h *AnalyticsHandler) GetTransactionsSummary(ctx context.Context, request a
 	}, nil
 }
 
+func (h *AnalyticsHandler) GetMonthlySavings(ctx context.Context, request api.GetMonthlySavingsRequestObject) (api.GetMonthlySavingsResponseObject, error) {
+	requestID := requestIDFromContext(ctx)
+	year := int(request.Params.Year)
+	if year <= 0 {
+		return api.GetMonthlySavings400JSONResponse{
+			Body:    api.Error{Message: "year must be a positive integer"},
+			Headers: api.GetMonthlySavings400ResponseHeaders{XRequestID: requestID},
+		}, nil
+	}
+
+	netRows, err := h.txRepo.ListMonthlyNetTotals(ctx, year)
+	if err != nil {
+		h.logger.Error("monthly savings: query failed", zap.Error(err))
+		return nil, err
+	}
+
+	months := make([]int32, 12)
+	values := make([]int64, 12)
+	for i := range months {
+		months[i] = int32(i + 1)
+	}
+
+	for _, row := range netRows {
+		if row.Month < 1 || row.Month > 12 {
+			continue
+		}
+		values[row.Month-1] = row.AmountCents
+	}
+
+	var total int64
+	for _, v := range values {
+		total += v
+	}
+
+	return api.GetMonthlySavings200JSONResponse{
+		Body: api.MonthlySavings{
+			Year:   request.Params.Year,
+			Months: months,
+			Values: values,
+			Total:  total,
+		},
+		Headers: api.GetMonthlySavings200ResponseHeaders{XRequestID: requestID},
+	}, nil
+}
+
 func buildSummarySection(categoriesList []categories.Category, rows []transactions.MonthlyCategoryTotal) api.TransactionsSummarySection {
 	valuesByCategory := make(map[int64][]int64, len(categoriesList))
 	for _, c := range categoriesList {

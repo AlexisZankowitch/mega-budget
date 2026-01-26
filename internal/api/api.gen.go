@@ -51,6 +51,14 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// MonthlySavings defines model for MonthlySavings.
+type MonthlySavings struct {
+	Months []int32 `json:"months"`
+	Total  int64   `json:"total"`
+	Values []int64 `json:"values"`
+	Year   int32   `json:"year"`
+}
+
 // Transaction defines model for Transaction.
 type Transaction struct {
 	AmountCents     int64              `json:"amount_cents"`
@@ -104,6 +112,11 @@ type TransactionsSummarySection struct {
 	Total        int64                    `json:"total"`
 }
 
+// GetMonthlySavingsParams defines parameters for GetMonthlySavings.
+type GetMonthlySavingsParams struct {
+	Year int32 `form:"year" json:"year"`
+}
+
 // GetTransactionsSummaryParams defines parameters for GetTransactionsSummary.
 type GetTransactionsSummaryParams struct {
 	Year int32 `form:"year" json:"year"`
@@ -137,6 +150,9 @@ type UpdateTransactionJSONRequestBody = TransactionUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get monthly net savings for a year
+	// (GET /analytics/monthly-savings)
+	GetMonthlySavings(w http.ResponseWriter, r *http.Request, params GetMonthlySavingsParams)
 	// Get monthly spending and income summary by category
 	// (GET /analytics/transactions-summary)
 	GetTransactionsSummary(w http.ResponseWriter, r *http.Request, params GetTransactionsSummaryParams)
@@ -180,6 +196,40 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetMonthlySavings operation middleware
+func (siw *ServerInterfaceWrapper) GetMonthlySavings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMonthlySavingsParams
+
+	// ------------- Required query parameter "year" -------------
+
+	if paramValue := r.URL.Query().Get("year"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "year", r.URL.Query(), &params.Year)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMonthlySavings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetTransactionsSummary operation middleware
 func (siw *ServerInterfaceWrapper) GetTransactionsSummary(w http.ResponseWriter, r *http.Request) {
@@ -578,6 +628,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/analytics/monthly-savings", wrapper.GetMonthlySavings)
 	m.HandleFunc("GET "+options.BaseURL+"/analytics/transactions-summary", wrapper.GetTransactionsSummary)
 	m.HandleFunc("GET "+options.BaseURL+"/categories", wrapper.ListCategories)
 	m.HandleFunc("POST "+options.BaseURL+"/categories", wrapper.CreateCategory)
@@ -591,6 +642,48 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/transactions/{transactionId}", wrapper.UpdateTransaction)
 
 	return m
+}
+
+type GetMonthlySavingsRequestObject struct {
+	Params GetMonthlySavingsParams
+}
+
+type GetMonthlySavingsResponseObject interface {
+	VisitGetMonthlySavingsResponse(w http.ResponseWriter) error
+}
+
+type GetMonthlySavings200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetMonthlySavings200JSONResponse struct {
+	Body    MonthlySavings
+	Headers GetMonthlySavings200ResponseHeaders
+}
+
+func (response GetMonthlySavings200JSONResponse) VisitGetMonthlySavingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMonthlySavings400ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetMonthlySavings400JSONResponse struct {
+	Body    Error
+	Headers GetMonthlySavings400ResponseHeaders
+}
+
+func (response GetMonthlySavings400JSONResponse) VisitGetMonthlySavingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetTransactionsSummaryRequestObject struct {
@@ -1069,6 +1162,9 @@ func (response UpdateTransaction404JSONResponse) VisitUpdateTransactionResponse(
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Get monthly net savings for a year
+	// (GET /analytics/monthly-savings)
+	GetMonthlySavings(ctx context.Context, request GetMonthlySavingsRequestObject) (GetMonthlySavingsResponseObject, error)
 	// Get monthly spending and income summary by category
 	// (GET /analytics/transactions-summary)
 	GetTransactionsSummary(ctx context.Context, request GetTransactionsSummaryRequestObject) (GetTransactionsSummaryResponseObject, error)
@@ -1131,6 +1227,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetMonthlySavings operation middleware
+func (sh *strictHandler) GetMonthlySavings(w http.ResponseWriter, r *http.Request, params GetMonthlySavingsParams) {
+	var request GetMonthlySavingsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMonthlySavings(ctx, request.(GetMonthlySavingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMonthlySavings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMonthlySavingsResponseObject); ok {
+		if err := validResponse.VisitGetMonthlySavingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetTransactionsSummary operation middleware
@@ -1444,26 +1566,27 @@ func (sh *strictHandler) UpdateTransaction(w http.ResponseWriter, r *http.Reques
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xZ3W7jNhN9FWK+71KxnR/0QndNtiiCtttitwUKLIKAkcYOFxKpkFS3hqF3L0hKtqgf",
-	"W0lseZH4ToqY4cyZM8M59AoikWaCI9cKwhWo6BFTah9vqMaFkEvznEmRodQM7ZdIItUY31Nt3uZCpuYJ",
-	"YqrxTLMUIQC9zBBCUFoyvoAiABZ7axnXP1xt1jGucYHSLOQ0RbO0YaEIQOJTziTGEH4x5sqlQd2du7VF",
-	"8fAVI20MVnHc2GXtaIZtaFdtM/8rU7ptnGlM/Yf/S5xDCP+bboCflqhP15AX642olHTZDt9a2+bOX1l8",
-	"iGh/klLIttUUlaKLAYarhV22/5SUKxppJnh7B5qKnOv7qCLqACZFJRT3PdzjeZLQhwQh1DLHTgsvIHqM",
-	"KpIsq6Lo2eQFhaE38NxXufVcanvTVTQtM4GP7c56qqWpr6SOkqznAv96PHdBuQO9fXSMes28vGnUrPT1",
-	"jVNKh6RUfc7TlHadmYxHwnXegemsTH3GdXZTwfWjz406qJcX3X3D40QAKkMem9hf5csSqRzkQANg+3/r",
-	"UGreBBVEAyH+JL51TCY7KNeBjtA0Gbj2H5rk2I9/3w7barLu8HqDyquBSFRZaaMhkjzl99bYK90OQIpv",
-	"L2pL9Xx1mB2OfwM560/QiLEfOfPvjM+FHVGYNk0EfsMFvc7jBWry4x+3Bn+UyiIJs8n5ZGb8ExlymjEI",
-	"4XIym1xCABkti3BKOU2WmkVqWmsb6kxtesACbYc3SaHm420MIfyMuqtlGMuSpqhRKgi/mJYBITzlaL+5",
-	"ua0qnw0QrhM63DvrMWWcpXkK4XkHpHfGlMoEV44xF7OZIw7XyK3rNMsSFlnnp1+VY9lmt2dywKXB6+rw",
-	"+y8QwCPS2Ia9gr/PPuFTjkqf3X4w7/7q8hthMXLN5gwlmQtJtKQR44sJ1KFodnqz99UeA3SzcEdI1zQm",
-	"0jk6Xmyms1fEMxQjtsUmS1J1WEJ5TFyPJeVK8rAk0VpzFAFMy7eygXTS14wtN5tlB2SQJ62OTB0PXuMQ",
-	"qUFVBJAJ1YGVG5DXss4VLip9LeLl3mEqp/HC75SmQRStJJ3vffeuBDmP4lOB752BDllCe8t3uqq+3MaF",
-	"cyVBNxH7FP1g/+5R1GPKVTuOj4JU+I6a2avDZ/aj0GQuch4fKa8uG15eg94poj9ps1HKe+yj+x3k3xzc",
-	"fvK7hkIzgm5mwk2hD54MuwfsuwCyvINq7k5gpFOsvIAYdIq9TZq/1QPsnZSwI3DraK5LxK2zdV03DROF",
-	"CUuZhu0qkP7rVODFbLZDEwZNbG55lOQxknoERHAiJHnAuZBI9CNTxEQ9sdc4bQ+VplJXF2odbvbdzTVd",
-	"ucmlEtJuZfOT0QXjFr6+nelco9zfzix+1r72VueZLXgMQf49KKp3M6tbteiV/w69WL/UP8xh2/4NZ2TV",
-	"6P1ucRKORxCO2stA44CarmpvgwRkk7MnDXl8Dan9HwcHXEbDOMfPSUyOKCYbLNitJ73SP6ikHPWgO46w",
-	"/M5Yf9KWb0Nb+qd3UfwXAAD//5kC+HTIJwAA",
+	"H4sIAAAAAAAC/+xZ3W7jNhN9FYLfd6nYzg96obsmWxRBu9ti0wIFFkHASGOHC4lUyNFujcDvXpCUbFGi",
+	"YiVx5EXiO/9Qw5kzhzNzqAeayLyQAgRqGj9QndxBzuzHC4awkGppPhdKFqCQg/0nUcAQ0huG5ttcqtx8",
+	"oilDOEKeA40oLgugMdWouFjQVUR56q3lAn8626zjAmEByiwULAeztGVhFVEF9yVXkNL4izFXLY2a7lyv",
+	"Lcrbr5CgMVjHcWGXdaMZtqFd9Zj537nGrnGOkPsf/q9gTmP6v+kG+GmF+nQN+Wq9EVOKLbvhW2uPufN3",
+	"kb5GtL8oJVXXag5as8UAw/XCkO2PUuBdtrxi37hY6MAm5n8fzCafTk+CfPJxjChKZNlALn5jWQn9O/Y8",
+	"1d5xCUwNcraFlX0uqsNee1OHEILwL8WEZglyKbr4sVyWAm+S+qwPCCWp2HTTc3xFmWXsNgMaoyohaOEZ",
+	"tSIFnShe1FH0bPKM2oIbeG7q4+G51PUmVHc6ZiIf260lqZGmvqq0l2Q9FfiX47kNyi3o7aLoNs/M8+tu",
+	"w0pf6T2kdEhK9VWZ5yw0dnCRSNe8BqazNnUF6+zupofoAkRqYn+RL7vqC2tvohqigRB/lt8Dw90WygXQ",
+	"GbmjtuBoOvzUJtnOShcNmZW5uLHGXjwIKPn9WWWpma8XTTQt5Kw/USvGfuTM41zMpZ3yOJoiQj/Cgp2X",
+	"6QKQ/PznpcEflLZI0tnkeDIz/skCBCs4jenpZDY5pREtWHUIp0ywbIk80dPcTX9HejP+LcAWd5MPZnC4",
+	"TGlMfwVsDYrGnmI5IChN4y+mUNCY3peglrVIiOtDswnf1T+HdvAU5lzwvMxpfBwA8tqY0oUU2vHkZDZz",
+	"dBEIwnrNiiLjifV7+lU7bm12eyzzrfAs7l4Zp3/8RiN6Byy1ET/Qf44+w30JGo8uP5jv/urqP8JTEMjn",
+	"HBSZS0VQsYSLxYQ2UWiXdrP32Q5jc/ohENI5S4lyjo4XmynldbcxxCIVCYkAJBURrT1GLH/MAw3KNjqd",
+	"PtKbttXH21CXe2vkDcV4YPD4DK6HAsJEStxYQKqV5HZJkvVNg6F09a3qeUH6mkn7YrPsFRnkXajsmToe",
+	"vMYh0oBqFdFC6gBWTtOtL3PcwQWN5zJd7hymSkCu/OZuCsSqk6Tjne8eSpDzKD0c8J0z0CFLWO/xnT7U",
+	"/1ymK+dKBk7E+RT9YH/3KOox5awbxydJanxHzezZ62f2k0Qyl6VI95RXlw0vr1HvFNGftNkox3vs1v0O",
+	"8m8at5/80FBoVNNmJtwc9MGTYVgTXke0KANUc9dYI3Wx6s5sUBd7mzR/qw3snRxhR+BOa25KxEdn66Zu",
+	"GiYKM55zpI+rQPavU4Ens9kWTRi1sbkUSVamQJoRECmIVOQW5lIBwTuuiYl6Ym8eux5qZArrO+CAm33X",
+	"yW1XLkqlpbJb2fwUbMGFha9vZzZHULvbmadP2tdeRD6xBI8hyH8ERfVuZnWrFr3jv0UvNt9DvU6z7b52",
+	"HFk1eq/aDsJxD8IRvQy0GtT0ofFtkIBsc/agIfevIdF/nz3gMpqO034OYnJEMdliwXY96R39V5WUoza6",
+	"/QjLH4z1B235NrSl371Xq/8CAAD//7VoL5e+KwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

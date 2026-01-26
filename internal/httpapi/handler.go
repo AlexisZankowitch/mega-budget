@@ -60,4 +60,8 @@ func (h *Handler) GetTransactionsSummary(ctx context.Context, request api.GetTra
 	return h.analytics.GetTransactionsSummary(ctx, request)
 }
 
+func (h *Handler) GetMonthlySavings(ctx context.Context, request api.GetMonthlySavingsRequestObject) (api.GetMonthlySavingsResponseObject, error) {
+	return h.analytics.GetMonthlySavings(ctx, request)
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)

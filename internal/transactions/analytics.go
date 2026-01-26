@@ -79,3 +79,41 @@ func (r *Repository) ListMonthlyIncomeByCategory(ctx context.Context, year int) 
 
 	return results, nil
 }
+
+type MonthlyNetTotal struct {
+	Month       int
+	AmountCents int64
+}
+
+func (r *Repository) ListMonthlyNetTotals(ctx context.Context, year int) ([]MonthlyNetTotal, error) {
+	const query = `
+		SELECT
+			EXTRACT(MONTH FROM transaction_date)::int AS month,
+			(SUM(amount) * 100)::bigint AS amount_cents
+		FROM transactions
+		WHERE transaction_date >= make_date($1, 1, 1)
+			AND transaction_date < make_date($1 + 1, 1, 1)
+		GROUP BY month
+		ORDER BY month
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]MonthlyNetTotal, 0)
+	for rows.Next() {
+		var row MonthlyNetTotal
+		if err := rows.Scan(&row.Month, &row.AmountCents); err != nil {
+			return nil, err
+		}
+		results = append(results, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}

@@ -373,6 +373,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /analytics/monthly-savings:
+    get:
+      summary: Get monthly net savings for a year
+      operationId: getMonthlySavings
+      parameters:
+        - in: query
+          name: year
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySavings"
+        "400":
+          description: Bad request
+          headers:
+            X-Request-ID:
+              description: Request identifier for tracing.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     TransactionCreate:
@@ -509,6 +544,30 @@ components:
         category_id:
           type: integer
           format: int64
+        values:
+          type: array
+          items:
+            type: integer
+            format: int64
+        total:
+          type: integer
+          format: int64
+    MonthlySavings:
+      type: object
+      required:
+        - year
+        - months
+        - values
+        - total
+      properties:
+        year:
+          type: integer
+          format: int32
+        months:
+          type: array
+          items:
+            type: integer
+            format: int32
         values:
           type: array
           items:
