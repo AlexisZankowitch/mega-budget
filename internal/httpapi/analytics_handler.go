@@ -100,12 +100,14 @@ func (h *AnalyticsHandler) GetMonthlySavings(ctx context.Context, request api.Ge
 	for _, v := range values {
 		total += v
 	}
+	average := total / 12
 	return api.GetMonthlySavings200JSONResponse{
 		Body: api.MonthlySavings{
-			Year:   request.Params.Year,
-			Months: months,
-			Values: values,
-			Total:  total,
+			Year:    request.Params.Year,
+			Months:  months,
+			Values:  values,
+			Total:   total,
+			Average: average,
 		},
 		Headers: api.GetMonthlySavings200ResponseHeaders{XRequestID: requestID},
 	}, nil

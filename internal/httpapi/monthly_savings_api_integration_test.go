@@ -7,10 +7,11 @@ import (
 )
 
 type monthlySavingsResponse struct {
-	Year   int32   `json:"year"`
-	Months []int32 `json:"months"`
-	Values []int64 `json:"values"`
-	Total  int64   `json:"total"`
+	Year    int32   `json:"year"`
+	Months  []int32 `json:"months"`
+	Values  []int64 `json:"values"`
+	Total   int64   `json:"total"`
+	Average int64   `json:"average"`
 }
 
 func TestMonthlySavingsAnalytics(t *testing.T) {
@@ -54,5 +55,8 @@ func TestMonthlySavingsAnalytics(t *testing.T) {
 	}
 	if summary.Total != 5000 {
 		t.Fatalf("total = %d, want 5000", summary.Total)
+	}
+	if summary.Average != 416 {
+		t.Fatalf("average = %d, want 416", summary.Average)
 	}
 }

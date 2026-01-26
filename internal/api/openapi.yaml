@@ -591,6 +591,7 @@ components:
         - months
         - values
         - total
+        - average
       properties:
         year:
           type: integer
@@ -606,6 +607,9 @@ components:
             type: integer
             format: int64
         total:
+          type: integer
+          format: int64
+        average:
           type: integer
           format: int64
     Transaction:
